@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Media Guru (Edisi Kurikulum Merdeka)</title>
+    <style>
+        /* === BASE STYLES & CSS VARIABLES === */
+        :root {
+            --bg-color: #e0f2fe;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --browser-bg: #ffffff;
+            --browser-border: #e2e8f0;
+            --card-bg: #f8fafc;
+            --color-blue: #4ba3e3;
+            --color-orange: #f9a826;
+            --color-purple: #a0619c;
+            --color-yellow: #fbc531;
+            --color-dark-blue: #1e3a8a;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --nav-bg-mobile: #ffffff;
+        }
+
+        body.dark-mode {
+            --bg-color: #0f172a; --text-main: #f1f5f9; --text-muted: #94a3b8;
+            --browser-bg: #1e293b; --browser-border: #334155; --card-bg: #334155;
+            --color-dark-blue: #60a5fa; --nav-bg-mobile: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-main); background-color: var(--bg-color); color: var(--text-main);
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+            overflow-x: hidden; transition: background-color 0.3s, color 0.3s;
+        }
+
+        .bg-decor {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            background-image: radial-gradient(circle at 15% 50%, rgba(255,255,255,0.15) 0%, transparent 50%),
+                              radial-gradient(circle at 85% 30%, rgba(255,255,255,0.2) 0%, transparent 40%);
+            pointer-events: none;
+        }
+        body.dark-mode .bg-decor { opacity: 0.05; }
+
+        /* === HEADER === */
+        header { text-align: center; margin-top: 40px; margin-bottom: 20px; z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        h1 { color: var(--color-dark-blue); font-size: 2.5rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        h1:hover { transform: scale(1.05); }
+        .theme-toggle { background: var(--card-bg); border: 1px solid var(--browser-border); color: var(--text-main); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: 0.3s; }
+        .theme-toggle:hover { background: var(--color-blue); color: white; }
+
+        /* === MAIN LAYOUT === */
+        .portal-wrapper { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 40px; width: 100%; max-width: 1200px; padding: 20px; position: relative; z-index: 10; }
+        .orbit-bg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 300px; border: 2px dashed rgba(100, 116, 139, 0.4); border-radius: 50%; z-index: 0; pointer-events: none; }
+        .menu-column { display: flex; flex-direction: column; gap: 60px; z-index: 10; }
+        
+        
+        
+        
+
+        /* === MENU ITEMS === */
+        .menu-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: 0.3s; text-align: center; width: 120px; position: relative; }
+        .menu-item:hover { transform: scale(1.1) !important; }
+        .circle-icon { width: 90px; height: 90px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; color: white; box-shadow: 0 10px 20px rgba(0,0,0,0.15); margin-bottom: 10px; position: relative; animation: float 4s ease-in-out infinite; }
+        .circle-icon::after { content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; border: 2px dashed rgba(255,255,255,0.6); border-radius: 50%; }
+        .notif-dot { position: absolute; top: 0; right: 15px; width: 18px; height: 18px; background-color: #ef4444; border-radius: 50%; border: 2px solid white; z-index: 5; animation: pulse 2s infinite; display: block; }
+        
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-12px); } 100% { transform: translateY(0px); } }
+        
+        .menu-column.left .menu-item:nth-child(1) .circle-icon { animation-delay: 0s; }
+        .menu-column.left .menu-item:nth-child(2) .circle-icon { animation-delay: 1.5s; }
+        .menu-column.right .menu-item:nth-child(1) .circle-icon { animation-delay: 0.7s; }
+        .menu-column.right .menu-item:nth-child(2) .circle-icon { animation-delay: 2.2s; }
+        .menu-text { font-weight: 700; color: var(--color-dark-blue); font-size: 0.95rem; line-height: 1.2; }
+        
+        .bg-mpi { background-color: var(--color-yellow); } .bg-absen { background-color: var(--color-blue); } .bg-jurnal { background-color: var(--color-purple); } .bg-nilai { background-color: var(--color-orange); }
+
+        /* === BROWSER WINDOW === */
+        .browser-window { width: 100%; max-width: 650px; background: var(--browser-bg); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); overflow: hidden; z-index: 10; display: none; flex-direction: column; min-height: 520px; border: 1px solid var(--browser-border); }
+        .browser-header { background-color: #0f172a; padding: 12px 15px; display: flex; align-items: center; gap: 8px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; } .dot.red { background-color: #ff5f56; } .dot.yellow { background-color: #ffbd2e; } .dot.green { background-color: #27c93f; }
+        .clock-widget { margin-left: auto; color: #cbd5e1; font-family: monospace; font-size: 0.9rem; font-weight: bold;}
+        .browser-nav { background-color: var(--card-bg); padding: 10px 15px; border-bottom: 1px solid var(--browser-border); font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; font-family: monospace; }
+        .browser-content { padding: 25px; flex-grow: 1; overflow-y: auto; background-color: var(--browser-bg); animation: slideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* === CONTENT STYLES & NEW COMPONENTS === */
+        .view-title { color: var(--color-dark-blue); margin-bottom: 20px; font-size: 1.5rem; border-bottom: 2px solid var(--browser-border); padding-bottom: 10px;}
+        
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--browser-border); }
+        .tab-btn { padding: 10px 20px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-muted); font-weight: bold; cursor: pointer; transition: 0.2s; margin-bottom: -2px; }
+        .tab-btn.active { color: var(--color-dark-blue); border-bottom-color: var(--color-blue); }
+        .tab-btn:hover:not(.active) { color: var(--text-main); }
+        
+        /* Form & Tables */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: var(--text-main);}
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--browser-border); border-radius: 6px; font-family: inherit; background: var(--browser-bg); color: var(--text-main);}
+        button.btn-submit { background: var(--color-blue); color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;}
+        button.btn-submit:hover { background: var(--color-dark-blue); }
+        button.btn-outline { background: transparent; color: var(--color-purple); border: 1px solid var(--color-purple); padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;}
+        button.btn-outline:hover { background: var(--color-purple); color: white;}
+        button.btn-export { background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;}
+        button.btn-export:hover { background: #059669; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; color: var(--text-main); }
+        th, td { border: 1px solid var(--browser-border); padding: 8px; text-align: center; vertical-align: middle; }
+        td:nth-child(2) { text-align: left; font-weight: 600; } /* Kolom Nama */
+        th { background-color: var(--card-bg); color: var(--color-dark-blue); font-weight: 600; }
+        td input[type="number"] { width: 60px; padding: 5px; text-align: center; border: 1px solid var(--browser-border); border-radius: 4px; background: transparent; font-weight: bold; color: var(--text-main);}
+        
+        /* Badges for Diferensiasi */
+        .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; display: inline-block; margin-top: 5px; }
+        .badge-visual { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .badge-auditori { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+        .badge-kinestetik { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .badge-mahir { background: #e0e7ff; color: #3730a3; }
+        .btn-alpa { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold;}
+        .btn-alpa:hover { background: #ef4444; color: white;}
+
+        /* Toast & Warning */
+        .toast { position: fixed; bottom: 30px; right: 30px; background: #10b981; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); font-weight: bold; transform: translateX(200%); transition: 0.4s; z-index: 9999; display: flex; align-items: center; gap: 10px; }
+        .toast.show { transform: translateX(0); }
+        .toast.warning { background: #ef4444; }
+
+        /* Profile & Dashboard */
+        .profile-container { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-bottom: 25px; background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid var(--browser-border); }
+        .profile-avatar { width: 70px; height: 70px; background: var(--color-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;}
+        .stat-box { background: var(--browser-bg); padding: 15px; border-radius: 8px; border: 1px solid var(--browser-border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);}
+
+        /* === AVATAR HUB & DASHBOARD TOGGLE === */
+        .avatar-hub { display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: none; border: none; cursor: pointer; padding: 10px; }
+        .avatar-ring { width: 170px; height: 170px; border-radius: 50%; background: linear-gradient(135deg, var(--color-blue), var(--color-dark-blue)); display: flex; align-items: center; justify-content: center; font-size: 5rem; border: 5px solid var(--browser-bg); box-shadow: 0 15px 35px rgba(30,58,138,0.35); position: relative; animation: float 4s ease-in-out infinite; transition: transform 0.3s, box-shadow 0.3s; }
+        .avatar-ring::after { content: ''; position: absolute; inset: -14px; border: 2px dashed rgba(100,116,139,0.55); border-radius: 50%; }
+        .avatar-hub:hover .avatar-ring { transform: scale(1.08); box-shadow: 0 20px 45px rgba(30,58,138,0.5); }
+        .avatar-hub:focus-visible .avatar-ring { outline: 3px solid var(--color-orange); outline-offset: 8px; }
+        .portal-wrapper.open .avatar-hub { display: none; }
+        .portal-wrapper.open .browser-window { display: flex; animation: popIn 0.35s cubic-bezier(0.25, 1, 0.5, 1); }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .dot.red { cursor: pointer; }
+        .dot.red:hover { filter: brightness(0.85); }
+
+        /* === KUNCI MENU GURU === */
+        .lock-badge { position: absolute; bottom: -2px; right: -2px; width: 28px; height: 28px; border-radius: 50%; background: #1e293b; color: #fff; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; z-index: 6; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+        .avatar-ring .lock-badge { bottom: 8px; right: 8px; width: 44px; height: 44px; font-size: 1.3rem; border-width: 3px; }
+        body.guru-mode .lock-badge { display: none; }
+        .lock-toggle { display: none; background: var(--card-bg); border: 1px solid var(--browser-border); color: var(--text-main); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 0.8rem; transition: 0.3s; }
+        .lock-toggle:hover { background: #ef4444; color: white; }
+        body.guru-mode .lock-toggle { display: inline-block; }
+        .sync-btn { display: none; }
+        body.guru-mode .sync-btn { display: inline; }
+        @media (max-width: 1099px) { .circle-icon .lock-badge { width: 20px; height: 20px; font-size: 0.6rem; border-width: 1px; } }
+
+        .pin-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.65); z-index: 10000; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
+        .pin-overlay.show { display: flex; }
+        .pin-card { background: var(--browser-bg); color: var(--text-main); border: 1px solid var(--browser-border); border-radius: 16px; padding: 28px 24px; width: 100%; max-width: 340px; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.35); animation: popIn 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+        .pin-card h3 { color: var(--color-dark-blue); margin: 8px 0 6px; font-size: 1.25rem; }
+        .pin-card p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.4; }
+        .pin-card input { text-align: center; letter-spacing: 6px; font-size: 1.2rem; font-weight: bold; }
+        .pin-error { color: #ef4444; font-size: 0.8rem; font-weight: 600; min-height: 20px; margin: 8px 0; }
+        .pin-actions { display: flex; gap: 10px; }
+        .pin-actions button { flex: 1; }
+        .pin-card.shake { animation: shake 0.35s; }
+        @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+        /* === ORBIT DINAMIS (DESKTOP) === */
+        .orbit-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: visible; }
+        .orbit-svg path { fill: none; stroke: rgba(100,116,139,0.55); stroke-width: 2; stroke-dasharray: 8 8; stroke-linejoin: round; }
+        @media (min-width: 1100px) {
+            .portal-wrapper { height: 460px; }
+            .menu-column { display: contents; }
+            .menu-item { position: absolute; left: 0; top: 0; }
+            .circle-icon { animation: none; }
+        }
+
+        /* Mobile */
+        @media (max-width: 1099px) {
+            .portal-wrapper { flex-direction: column; gap: 20px; padding-bottom: 100px; }
+            .orbit-bg, .orbit-svg { display: none; }
+            .browser-window { order: 1; width: 95%; min-height: 60vh; margin-top: 10px; }
+            .menu-column { position: fixed; bottom: 0; left: 0; width: 100%; flex-direction: row; justify-content: space-around; background: var(--nav-bg-mobile); padding: 10px 5px 20px; border-top: 1px solid var(--browser-border); box-shadow: 0 -5px 15px rgba(0,0,0,0.1); margin: 0 !important; gap: 0; z-index: 1000; }
+            .menu-column.left .menu-item:nth-child(1), .menu-column.left .menu-item:nth-child(2), .menu-column.right .menu-item:nth-child(1), .menu-column.right .menu-item:nth-child(2) { transform: none; }
+            .circle-icon { width: 45px; height: 45px; font-size: 1.2rem; margin: 0 auto 5px; animation: none !important; }
+            .circle-icon::after { display: none; } .menu-text { font-size: 0.65rem; }
+        }
+        .bg-jadwal { background-color: #14b8a6; } .bg-info { background-color: #ec4899; }
+        .jadwal { font-size: 0.8rem; }
+        .jadwal td:nth-child(2) { text-align: center; font-weight: 400; }
+        .jadwal th.hari-ini { background: var(--color-blue); color: #fff; }
+        .jadwal td.hari-ini { background: rgba(75,163,227,0.18); font-weight: 600; }
+
+        @media (max-width: 1099px) {
+            .menu-column.left { width: 66.667%; }
+            .menu-column.right { left: 66.667%; width: 33.333%; }
+            .menu-item { width: auto; flex: 1; min-width: 0; }
+            .menu-text { font-size: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-decor"></div>
+    <header>
+        <h1 onclick="closeDashboard()" title="Tutup dashboard">Portal Guru</h1>
+        <button class="theme-toggle" onclick="toggleTheme()">🌙 Mode Gelap</button>
+        <button class="lock-toggle" id="guru-lock-btn" onclick="lockGuru()">🔒 Kunci Mode Guru</button>
+    </header>
+
+    <div class="portal-wrapper">
+        <svg class="orbit-svg" aria-hidden="true"><path id="orbit-path"></path></svg>
+        <div class="menu-column left">
+            <div class="menu-item" data-angle="215" style="order:1" onclick="loadContent('mpi')"><div class="circle-icon bg-mpi">🎓</div><div class="menu-text">Modul (MPI)</div></div>
+            <div class="menu-item" data-angle="180" style="order:2" onclick="loadContent('jadwal')"><div class="circle-icon bg-jadwal">🗓️</div><div class="menu-text">Jadwal Pelajaran</div></div>
+            <div class="menu-item" data-angle="145" style="order:3" onclick="loadContent('info')"><div class="circle-icon bg-info">📢<span class="notif-dot" id="dot-info"></span></div><div class="menu-text">Pengumuman & Tugas</div></div>
+            <div class="menu-item" data-angle="325" style="order:4" onclick="loadContent('absen')"><div class="circle-icon bg-absen">📋<span class="notif-dot" id="dot-absen"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Absensi & Diferensiasi</div></div>
+        </div>
+        <button class="avatar-hub" onclick="loadContent('home')" aria-label="Buka dashboard guru" title="Klik untuk membuka dashboard">
+            <div class="avatar-ring"><span class="lock-badge">🔒</span>👨‍🏫</div>
+        </button>
+        <div class="browser-window">
+            <div class="browser-header">
+                <div class="dot red" onclick="closeDashboard()" title="Tutup dashboard"></div><div class="dot yellow"></div><div class="dot green"></div>
+                <div class="clock-widget" id="clock">00:00:00</div>
+            </div>
+            <div class="browser-nav">
+                <span id="browser-url">https://portal.guru.id/dashboard</span>
+                <span class="sync-btn" style="cursor:pointer;" onclick="showToast('Memproses sinkronisasi data...', false)">🔄 Sinkronisasi</span>
+            </div>
+            <div class="browser-content" id="app-content"></div>
+        </div>
+        <div class="menu-column right">
+            <div class="menu-item" data-angle="0" style="order:5" onclick="loadContent('jurnal')"><div class="circle-icon bg-jurnal">✍️<span class="notif-dot" id="dot-jurnal"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Jurnal & P5</div></div>
+            <div class="menu-item" data-angle="35" style="order:6" onclick="loadContent('nilai')"><div class="circle-icon bg-nilai"><span class="lock-badge">🔒</span>📊</div><div class="menu-text">Daftar Nilai</div></div>
+        </div>
+    </div>
+
+    <div id="pin-modal" class="pin-overlay" onclick="if(event.target===this) closePin()">
+        <div class="pin-card" id="pin-card" role="dialog" aria-modal="true" aria-labelledby="pin-title">
+            <div style="font-size:2.5rem;">🔐</div>
+            <h3 id="pin-title">Akses Khusus Guru</h3>
+            <p>Menu ini hanya dapat dibuka oleh guru. Masukkan PIN untuk melanjutkan.</p>
+            <input type="password" id="pin-input" inputmode="numeric" maxlength="12" placeholder="PIN" autocomplete="off" onkeydown="if(event.key==='Enter') submitPin()">
+            <div class="pin-error" id="pin-error"></div>
+            <div class="pin-actions">
+                <button class="btn-outline" onclick="closePin()">Batal</button>
+                <button class="btn-submit" onclick="submitPin()">Buka</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">✅ Berhasil disimpan!</div>
+
+    <script>
+        // === JAM & TEMA ===
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('id-ID', { hour12: false }); }, 1000);
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
+            document.querySelector('.theme-toggle').innerText = document.body.classList.contains('dark-mode') ? '☀️ Mode Terang' : '🌙 Mode Gelap';
+        }
+
+        // === NOTIFIKASI & LOGIC KHUSUS ===
+        function showToast(msg, isWarning = false) {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = isWarning ? `⚠️ ${msg}` : `✅ ${msg}`;
+            toast.className = `toast show ${isWarning ? 'warning' : ''}`;
+            setTimeout(() => toast.classList.remove('show'), isWarning ? 5000 : 3000);
+        }
+
+        function laporAlpa(nama) {
+            showToast(`Peringatan: ${nama} terdeteksi Alpa beruntun! Surat Panggilan Orang Tua otomatis di-draft.`, true);
+        }
+
+        function syncRPP() {
+            document.getElementById('jurnal-topik').value = "1.2 Menganalisis Vektor Posisi";
+            document.getElementById('jurnal-catatan').value = "Pendekatan berdiferensiasi: Siswa visual menggunakan simulasi PhET, siswa auditori diskusi kelompok.";
+            showToast("Berhasil mengambil data dari ATP/Modul Ajar!");
+        }
+
+        function switchJurnalTab(tabName) {
+            document.getElementById('tab-intra').style.display = tabName === 'intra' ? 'block' : 'none';
+            document.getElementById('tab-p5').style.display = tabName === 'p5' ? 'block' : 'none';
+            document.getElementById('btn-intra').classList.toggle('active', tabName === 'intra');
+            document.getElementById('btn-p5').classList.toggle('active', tabName === 'p5');
+        }
+
+        // Mock function untuk Export Excel
+        function exportToExcel() {
+            showToast("Menyiapkan file Rekap_Nilai_XMIPA1.xlsx...");
+            setTimeout(() => {
+                showToast("File Excel berhasil diunduh! Siap diunggah ke Rapor Digital.");
+            }, 1500);
+        }
+
+        // === DATA KONTEN SPA ===
+        const appData = {
+            home: {
+                url: "Dashboard / Beranda",
+                getHtml: () => `
+                    <h2 class="view-title">Selamat Datang, Budi Santoso 👋</h2>
+                    <div class="profile-container">
+                        <div class="profile-avatar">👨‍🏫</div>
+                        <div><h3 style="color: var(--color-dark-blue); font-size: 1.2rem;">Budi Santoso, S.Pd., M.Kom.</h3><p style="color: var(--text-muted); font-size: 0.9rem;">NIP: 19850723 201001 1 015 | Wali Kelas X-MIPA 1</p></div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-box"><h2 style="color: var(--color-orange);">4</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Kelas Diampu</p></div>
+                        <div class="stat-box"><h2 style="color: var(--color-blue);">P5</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Koord. Gaya Hidup</p></div>
+                        <div class="stat-box"><h2 style="color: #16a34a;">24</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Jam Pelajaran</p></div>
+                    </div>
+                `
+            },
+            absen: {
+                url: "Modul Siswa / Absensi & Diferensiasi",
+                getHtml: () => `
+                    <h2 class="view-title">Pemetaan Siswa & Absensi</h2>
+                    <table>
+                        <tr><th>Nama Siswa & Gaya Belajar (Asesmen Diagnostik)</th><th style="text-align:center; width: 120px;">Kehadiran</th></tr>
+                        <tr>
+                            <td><strong>Ahmad Budi</strong><br>
+                                <span class="badge badge-visual">👁️ Visual</span> <span class="badge badge-mahir">⭐ Mahir</span>
+                            </td>
+                            <td style="text-align:center;"><input type="checkbox" checked style="width:20px; height:20px;"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Citra Kirana</strong><br>
+                                <span class="badge badge-auditori">🎧 Auditori</span> <span class="badge" style="background:#f1f5f9; color:#475569;">✓ Cakap</span>
+                            </td>
+                            <td style="text-align:center;"><input type="checkbox" checked style="width:20px; height:20px;"></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Deni Pratama</strong><br>
+                                <span class="badge badge-kinestetik">🏃 Kinestetik</span> <span class="badge" style="background:#fee2e2; color:#b91c1c;">! Intervensi</span>
+                            </td>
+                            <td style="text-align:center;"><button class="btn-alpa" onclick="laporAlpa('Deni Pratama')">Tandai Alpa</button></td>
+                        </tr>
+                    </table>
+                    <button class="btn-submit" style="margin-top: 15px;" onclick="showToast('Absensi & Data Pemetaan tersimpan!'); document.getElementById('dot-absen').style.display='none'; setTimeout(()=>loadContent('home'), 1500);">Simpan Data Kelas</button>
+                `
+            },
+            jurnal: {
+                url: "Modul Guru / Jurnal Harian & P5",
+                getHtml: () => `
+                    <h2 class="view-title">Jurnal Mengajar & Proyek</h2>
+                    <div class="tabs">
+                        <button class="tab-btn active" id="btn-intra" onclick="switchJurnalTab('intra')">Intrakurikuler</button>
+                        <button class="tab-btn" id="btn-p5" onclick="switchJurnalTab('p5')">Proyek P5</button>
+                    </div>
+                    
+                    <div id="tab-intra">
+                        <div class="form-group" style="display:flex; justify-content:space-between; align-items:flex-end;">
+                            <div style="flex-grow: 1; margin-right: 10px;">
+                                <label>Mata Pelajaran & Kelas</label>
+                                <select><option>Fisika - X MIPA 1</option></select>
+                            </div>
+                            <button class="btn-outline" onclick="syncRPP()">🔄 Ambil dari ATP/Modul</button>
+                        </div>
+                        <div class="form-group"><label>Materi / TP</label><input type="text" id="jurnal-topik" placeholder="Otomatis terisi jika klik tombol Sinkronisasi..."></div>
+                        <div class="form-group"><label>Evaluasi / Catatan Diferensiasi</label><textarea id="jurnal-catatan" rows="3"></textarea></div>
+                    </div>
+
+                    <div id="tab-p5" style="display:none;">
+                        <div class="form-group">
+                            <label>Tema Proyek & Dimensi</label>
+                            <select style="margin-bottom:10px;"><option>Gaya Hidup Berkelanjutan</option><option>Kearifan Lokal</option></select>
+                            <select><option>Dimensi: Bernalar Kritis</option><option>Dimensi: Gotong Royong</option></select>
+                        </div>
+                        <div class="form-group"><label>Aktivitas Observasi Hari Ini</label><textarea rows="2" placeholder="Siswa memilah sampah organik..."></textarea></div>
+                    </div>
+
+                    <button class="btn-submit" onclick="showToast('Jurnal berhasil disinkronkan ke server!'); document.getElementById('dot-jurnal').style.display='none'; setTimeout(()=>loadContent('home'), 1500);">Kirim Jurnal</button>
+                `
+            },
+            nilai: {
+                url: "Modul Asesmen / Rekap Nilai Formatif & Sumatif",
+                getHtml: () => `
+                    <h2 class="view-title">Rekap Nilai Formatif & Sumatif</h2>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <select style="flex: 1;"><option>Tahun Ajaran 2026/2027 Ganjil</option></select>
+                        <select style="flex: 1;"><option>Kelas: X MIPA 1</option><option>Kelas: X MIPA 2</option></select>
+                        <select style="flex: 1;"><option>Mata Pelajaran: Fisika</option></select>
+                    </div>
+
+                    <div style="overflow-x: auto; margin-bottom: 20px;">
+                        <table>
+                            <tr>
+                                <th rowspan="2" style="width:40px;">No</th>
+                                <th rowspan="2">Nama Siswa</th>
+                                <th colspan="3">Formatif (Tujuan Pembelajaran)</th>
+                                <th rowspan="2" style="background:#e0f2fe; color:#0369a1;">Sumatif<br>(STS/SAS)</th>
+                            </tr>
+                            <tr>
+                                <th style="font-size:0.75rem;">TP 1 (Vektor)</th>
+                                <th style="font-size:0.75rem;">TP 2 (Kinetika)</th>
+                                <th style="font-size:0.75rem;">TP 3 (Dinamika)</th>
+                            </tr>
+                            <tr>
+                                <td>1</td>
+                                <td>Ahmad Budi</td>
+                                <td><input type="number" value="85" max="100"></td>
+                                <td><input type="number" value="90" max="100"></td>
+                                <td><input type="number" value="88" max="100"></td>
+                                <td style="background:#f0f9ff;"><input type="number" value="86" max="100" style="background:white;"></td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Citra Kirana</td>
+                                <td><input type="number" value="92" max="100"></td>
+                                <td><input type="number" value="88" max="100"></td>
+                                <td><input type="number" value="95" max="100"></td>
+                                <td style="background:#f0f9ff;"><input type="number" value="90" max="100" style="background:white;"></td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Deni Pratama</td>
+                                <td><input type="number" value="70" max="100" style="color: #ef4444;"></td>
+                                <td><input type="number" value="75" max="100"></td>
+                                <td><input type="number" value="78" max="100"></td>
+                                <td style="background:#f0f9ff;"><input type="number" value="72" max="100" style="color: #ef4444; background:white;"></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-submit" style="flex:1;" onclick="showToast('Perubahan Nilai Berhasil Disimpan ke Draft Lokal!')">💾 Simpan Draft</button>
+                        <button class="btn-export" style="flex:1;" onclick="exportToExcel()">📥 Unduh Format Excel (Untuk RDM/E-Rapor)</button>
+                    </div>
+                `
+            },
+            jadwal: {
+                url: "Modul Siswa / Jadwal Pelajaran",
+                getHtml: () => {
+                    const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
+                    const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                    const dow = new Date().getDay();
+                    const sel = (dow >= 1 && dow <= 5) ? dow - 1 : -1;
+                    const mapel = [
+                        ['Fisika', 'Fisika', 'Matematika', 'Matematika', 'B. Indonesia', 'B. Indonesia', 'Kimia', 'Kimia'],
+                        ['Biologi', 'Biologi', 'B. Inggris', 'B. Inggris', 'Fisika', 'Fisika', 'Informatika', 'Informatika'],
+                        ['Matematika', 'Matematika', 'Kimia', 'Kimia', 'Sejarah', 'Sejarah', 'P5', 'P5'],
+                        ['B. Indonesia', 'B. Indonesia', 'Fisika', 'Fisika', 'PJOK', 'PJOK', 'Biologi', 'Biologi'],
+                        ['PAI', 'PAI', 'B. Inggris', 'B. Inggris', 'Matematika', 'Informatika', '-', '-']
+                    ];
+                    const rows = [
+                        { j: '1', w: '07.00 - 07.45', i: 0 }, { j: '2', w: '07.45 - 08.30', i: 1 }, { j: '3', w: '08.30 - 09.15', i: 2 },
+                        { b: 'Istirahat 09.15 - 09.30' },
+                        { j: '4', w: '09.30 - 10.15', i: 3 }, { j: '5', w: '10.15 - 11.00', i: 4 }, { j: '6', w: '11.00 - 11.45', i: 5 },
+                        { b: 'Ishoma 11.45 - 12.15' },
+                        { j: '7', w: '12.15 - 13.00', i: 6 }, { j: '8', w: '13.00 - 13.45', i: 7 }
+                    ];
+                    const body = rows.map(r => r.b
+                        ? `<tr><td colspan="6" style="background:var(--card-bg); color:var(--text-muted); font-size:0.75rem; font-weight:600;">\u2615 ${r.b}</td></tr>`
+                        : `<tr><td><strong>${r.j}</strong><br><span style="font-size:0.7rem; color:var(--text-muted);">${r.w}</span></td>${mapel.map((d, k) => `<td class="${k === sel ? 'hari-ini' : ''}">${d[r.i]}</td>`).join('')}</tr>`
+                    ).join('');
+                    return `
+                        <h2 class="view-title">Jadwal Pelajaran</h2>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Kelas X-MIPA 1 \u2022 Semester Ganjil 2026/2027 \u2022 Hari ini: <strong>${namaHari[dow]}</strong></p>
+                        <div style="overflow-x:auto;">
+                            <table class="jadwal">
+                                <tr><th style="width:90px;">Jam</th>${hari.map((h, k) => `<th class="${k === sel ? 'hari-ini' : ''}">${h}</th>`).join('')}</tr>
+                                ${body}
+                            </table>
+                        </div>
+                    `;
+                }
+            },
+            info: {
+                url: "Modul Siswa / Pengumuman & Tugas",
+                getHtml: () => {
+                    const fmt = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }); };
+                    const card = 'padding:12px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:10px; background:var(--card-bg);';
+                    const pengumuman = [
+                        { judul: 'Sumatif Tengah Semester', isi: 'Cakupan materi Bab 1-3. Kisi-kisi dan latihan soal tersedia di menu Modul (MPI).', tag: 'Penting', warna: 'background:#fee2e2; color:#b91c1c;' },
+                        { judul: 'Kegiatan P5: Gaya Hidup Berkelanjutan', isi: 'Setiap siswa membawa botol minum dan wadah makan sendiri selama pekan proyek.', tag: 'P5', warna: 'background:#dcfce7; color:#166534;' },
+                        { judul: 'Pembagian Kelompok Praktikum', isi: 'Kelompok praktikum Fisika sudah ditentukan. Cek dengan wali kelas.', tag: 'Info', warna: 'background:#dbeafe; color:#1e40af;' }
+                    ];
+                    const tugas = [
+                        { mapel: 'Fisika', judul: 'Latihan Soal Vektor Posisi (hal. 24)', n: 2 },
+                        { mapel: 'Matematika', judul: 'Rangkuman Trigonometri', n: 5 },
+                        { mapel: 'Biologi', judul: 'Laporan Observasi Sampah Organik (P5)', n: 9 }
+                    ];
+                    return `
+                        <h2 class="view-title">Pengumuman & Tugas</h2>
+                        <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin-bottom:10px;">\ud83d\udce2 Pengumuman</h3>
+                        ${pengumuman.map(p => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${p.judul}</strong><span class="badge" style="${p.warna} margin-top:0;">${p.tag}</span></div><p style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${p.isi}</p></div>`).join('')}
+                        <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin:20px 0 10px;">\ud83d\udcdd Tugas</h3>
+                        ${tugas.map(t => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${t.judul}</strong>${t.n <= 2 ? '<span class="badge" style="background:#fee2e2; color:#b91c1c; margin-top:0;">\u23f0 Segera</span>' : ''}</div><p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">${t.mapel} \u2022 Tenggat: ${fmt(t.n)}</p></div>`).join('')}
+                    `;
+                }
+            },
+            mpi: {
+                url: "Modul Interaktif / Pustaka",
+                getHtml: () => `
+                    <h2 class="view-title">Pustaka Modul Ajar & MPI</h2>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>📚 Modul Ajar (RPP Plus)</h4><p style="font-size:0.8rem; color:var(--text-muted);">Tersinkronisasi dengan Jurnal Harian.</p></div>
+                        <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>🎲 Media Interaktif</h4><p style="font-size:0.8rem; color:var(--text-muted);">Kuis, Game edukasi, Simulasi.</p></div>
+                    </div>
+                `
+            }
+        };
+
+        const contentArea = document.getElementById('app-content');
+        const urlArea = document.getElementById('browser-url');
+
+        function closeDashboard() {
+            document.querySelector('.portal-wrapper').classList.remove('open');
+        }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDashboard(); });
+
+        // === KUNCI MENU: hanya Modul (MPI) terbuka untuk murid ===
+        const GURU_PIN = '123456'; // GANTI PIN INI
+        const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai'];
+        let guruAuth = false;
+        let pendingMenu = null;
+        try { guruAuth = sessionStorage.getItem('guruAuth') === '1'; } catch (e) {}
+
+        function applyGuruMode() { document.body.classList.toggle('guru-mode', guruAuth); }
+
+        function openPin(menu) {
+            pendingMenu = menu;
+            const input = document.getElementById('pin-input');
+            input.value = '';
+            document.getElementById('pin-error').textContent = '';
+            document.getElementById('pin-modal').classList.add('show');
+            setTimeout(() => input.focus(), 50);
+        }
+        function closePin() {
+            document.getElementById('pin-modal').classList.remove('show');
+            pendingMenu = null;
+        }
+        function submitPin() {
+            const input = document.getElementById('pin-input');
+            if (input.value === GURU_PIN) {
+                guruAuth = true;
+                try { sessionStorage.setItem('guruAuth', '1'); } catch (e) {}
+                applyGuruMode();
+                const target = pendingMenu || 'home';
+                closePin();
+                showToast('Mode guru aktif. Selamat datang, Pak Budi!');
+                renderContent(target);
+            } else {
+                document.getElementById('pin-error').textContent = 'PIN salah. Silakan coba lagi.';
+                input.value = '';
+                const card = document.getElementById('pin-card');
+                card.classList.remove('shake'); card.offsetWidth; card.classList.add('shake');
+                input.focus();
+            }
+        }
+        function lockGuru() {
+            guruAuth = false;
+            try { sessionStorage.removeItem('guruAuth'); } catch (e) {}
+            applyGuruMode();
+            closeDashboard();
+            showToast('Mode guru dikunci kembali.');
+        }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePin(); });
+
+        function loadContent(menu) {
+            if (GURU_MENUS.includes(menu) && !guruAuth) { openPin(menu); return; }
+            renderContent(menu);
+        }
+
+        function renderContent(menu) {
+            if(appData[menu]) {
+                document.querySelector('.portal-wrapper').classList.add('open');
+                urlArea.innerHTML = appData[menu].url;
+                contentArea.style.animation = 'none'; contentArea.offsetHeight; 
+                contentArea.style.animation = 'slideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+                contentArea.innerHTML = appData[menu].getHtml();
+                if (menu === 'info') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
+            }
+        }
+
+        // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
+        const orbitMQ = window.matchMedia('(min-width: 1100px)');
+        const calmMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const portalWrap = document.querySelector('.portal-wrapper');
+        const orbitPath = document.getElementById('orbit-path');
+        const orbitItems = Array.from(document.querySelectorAll('.menu-item'));
+        const orbitBase = orbitItems.map(el => (parseFloat(el.dataset.angle) || 0) * Math.PI / 180); // sudut tiap ikon dari atribut data-angle
+        const orbitState = { rx: 300, ry: 250, h: 550, cleared: false };
+
+        function orbitOffset(theta, thetas, bobs) {
+            let d = 0;
+            for (let i = 0; i < thetas.length; i++) {
+                let diff = Math.abs(theta - thetas[i]) % (2 * Math.PI);
+                if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                if (diff < Math.PI / 3) d += bobs[i] * 0.5 * (1 + Math.cos(3 * diff));
+            }
+            return d;
+        }
+
+        function orbitTick(ms) {
+            const s = orbitState;
+            if (orbitMQ.matches) {
+                s.cleared = false;
+                const t = ms / 1000, k = calmMQ.matches ? 0 : 1;
+                const open = portalWrap.classList.contains('open');
+                const win = portalWrap.querySelector('.browser-window');
+                const W = portalWrap.clientWidth;
+                const tRx = open ? Math.min(540, W / 2 - 70) : Math.min(300, W / 2 - 90);
+                const tRy = open ? Math.max(300, win.offsetHeight / 2 + 50) : 250;
+                const tH = 2 * (tRy + 25);
+                s.rx += (tRx - s.rx) * 0.07;
+                s.ry += (tRy - s.ry) * 0.07;
+                s.h += (tH - s.h) * 0.07;
+                portalWrap.style.height = s.h + 'px';
+                const cx = W / 2, cy = s.h / 2;
+                const thetas = orbitBase.map((b, i) => b + k * 0.05 * Math.sin(t * 0.45 + i * 1.7));
+                const bobs = orbitBase.map((_, i) => k * 9 * Math.sin(t * 0.8 + i * 2.1));
+                const pt = th => {
+                    const d = orbitOffset(th, thetas, bobs);
+                    return [cx + (s.rx + d) * Math.cos(th), cy + (s.ry + d) * Math.sin(th)];
+                };
+                orbitItems.forEach((el, i) => {
+                    const [x, y] = pt(thetas[i]);
+                    el.style.left = (x - 60) + 'px';
+                    el.style.top = (y - 45) + 'px';
+                });
+                let d = ''; const N = 180;
+                for (let j = 0; j < N; j++) {
+                    const [x, y] = pt(j / N * 2 * Math.PI);
+                    d += (j ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+                }
+                orbitPath.setAttribute('d', d + 'Z');
+            } else if (!s.cleared) {
+                s.cleared = true;
+                portalWrap.style.height = '';
+                orbitItems.forEach(el => { el.style.left = ''; el.style.top = ''; });
+                orbitPath.removeAttribute('d');
+            }
+            requestAnimationFrame(orbitTick);
+        }
+        requestAnimationFrame(orbitTick);
+
+        window.onload = () => {
+            if(localStorage.getItem('theme') === 'dark') toggleTheme();
+            applyGuruMode(); // Dashboard tertutup saat awal; hanya avatar & menu yang terlihat
+        }
+    </script>
+</body>
+</html>
