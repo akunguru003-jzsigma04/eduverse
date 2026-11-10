@@ -261,7 +261,7 @@
             <div class="browser-content" id="app-content"></div>
         </div>
         <div class="menu-column right">
-            <div class="menu-item" data-angle="0" style="order:5" onclick="loadContent('jurnal')"><div class="circle-icon bg-jurnal">🔭<span class="notif-dot" id="dot-jurnal"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Jurnal & P5</div></div>
+            <div class="menu-item" data-angle="0" style="order:5" onclick="loadContent('jurnal')"><div class="circle-icon bg-jurnal">🔭<span class="notif-dot" id="dot-jurnal"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Daily Journal</div></div>
             <div class="menu-item" data-angle="35" style="order:6" onclick="loadContent('nilai')"><div class="circle-icon bg-nilai"><span class="lock-badge">🔒</span>⭐</div><div class="menu-text">Daftar Nilai</div></div>
         </div>
     </div>
@@ -305,8 +305,8 @@
         }
 
         function syncRPP() {
-            document.getElementById('jurnal-topik').value = "1.2 Menganalisis Vektor Posisi";
-            document.getElementById('jurnal-catatan').value = "Pendekatan berdiferensiasi: Siswa visual menggunakan simulasi PhET, siswa auditori diskusi kelompok.";
+            document.getElementById('jurnal-topik').value = "Fungsi Kuadrat dan Grafiknya";
+            document.getElementById('jurnal-catatan').value = "Pendekatan berdiferensiasi: siswa visual memakai GeoGebra, siswa auditori berdiskusi kelompok.";
             showToast("Berhasil mengambil data dari ATP/Modul Ajar!");
         }
 
@@ -329,18 +329,29 @@
         const appData = {
             home: {
                 url: "Dashboard / Beranda",
-                getHtml: () => `
-                    <h2 class="view-title">Selamat Datang, Budi Santoso 👋</h2>
-                    <div class="profile-container">
-                        <div class="profile-avatar">👨‍🏫</div>
-                        <div><h3 style="color: var(--color-dark-blue); font-size: 1.2rem;">Budi Santoso, S.Pd., M.Kom.</h3><p style="color: var(--text-muted); font-size: 0.9rem;">NIP: 19850723 201001 1 015 | Wali Kelas X-MIPA 1</p></div>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-box"><h2 style="color: var(--color-orange);">4</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Kelas Diampu</p></div>
-                        <div class="stat-box"><h2 style="color: var(--color-blue);">P5</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Koord. Gaya Hidup</p></div>
-                        <div class="stat-box"><h2 style="color: #16a34a;">24</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Jam Pelajaran</p></div>
-                    </div>
-                `
+                getHtml: async () => {
+                    const nama = window.guruNama || '';
+                    let kls = '-', sis = '-', jam = '-';
+                    if (sb) {
+                        const hitung = (t) => sb.from(t).select('id', { count: 'exact', head: true });
+                        const [a, b, c] = await Promise.all([hitung('kelas'), hitung('siswa'), hitung('jadwal')]);
+                        kls = a.count ?? '-'; sis = b.count ?? '-'; jam = c.count ?? '-';
+                    }
+                    const stat = (v, label, warna) => `<div class="stat-box"><h2 style="color:${warna};">${v}</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">${label}</p></div>`;
+                    return `
+                        <h2 class="view-title">Selamat Datang${nama ? ', ' + esc(nama.split(',')[0]) : ''} 👋</h2>
+                        <div class="profile-container">
+                            <div class="profile-avatar">👨‍🏫</div>
+                            <div><h3 style="color: var(--color-dark-blue); font-size: 1.2rem;">${esc(nama || 'Guru Matematika')}</h3><p style="color: var(--text-muted); font-size: 0.9rem;">${nama ? 'Guru Matematika' : 'Atur nama Anda di Kelola Kelas &amp; Siswa'}</p></div>
+                        </div>
+                        <div class="stats-grid">
+                            ${stat(kls, 'Kelas Diampu', 'var(--color-orange)')}
+                            ${stat(sis, 'Siswa', 'var(--color-blue)')}
+                            ${stat(jam, 'Jam Mengajar', '#16a34a')}
+                        </div>
+                        <button class="btn-submit" style="margin-top:16px;" onclick="loadContent('kelola')">⚙️ Kelola Kelas &amp; Siswa</button>
+                    `;
+                }
             },
             absen: {
                 url: "Modul Siswa / Absensi & Diferensiasi",
@@ -371,37 +382,38 @@
                 `
             },
             jurnal: {
-                url: "Modul Guru / Jurnal Harian & P5",
-                getHtml: () => `
-                    <h2 class="view-title">Jurnal Mengajar & Proyek</h2>
-                    <div class="tabs">
-                        <button class="tab-btn active" id="btn-intra" onclick="switchJurnalTab('intra')">Intrakurikuler</button>
-                        <button class="tab-btn" id="btn-p5" onclick="switchJurnalTab('p5')">Proyek P5</button>
-                    </div>
-                    
-                    <div id="tab-intra">
-                        <div class="form-group" style="display:flex; justify-content:space-between; align-items:flex-end;">
-                            <div style="flex-grow: 1; margin-right: 10px;">
-                                <label>Mata Pelajaran & Kelas</label>
-                                <select><option>Fisika - X MIPA 1</option></select>
+                url: "Modul Guru / Daily Journal",
+                getHtml: async () => {
+                    let opsiKelas = '<option value="">Matematika - X-1</option>';
+                    if (sb) {
+                        const { data } = await sb.from('kelas').select('id, nama').order('nama');
+                        opsiKelas = (data && data.length) ? data.map(k => `<option value="${k.id}">Matematika - ${esc(k.nama)}</option>`).join('') : '<option value="">Belum ada kelas (tambah di Kelola Kelas)</option>';
+                    }
+                    const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                    const kotak = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:14px; background:var(--card-bg);';
+                    const h3 = 'color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;';
+                    return `
+                        <h2 class="view-title">Daily Journal</h2>
+                        <div class="form-group" style="display:flex; gap:10px; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:140px;"><label>Tanggal</label><input type="date" id="jurnal-tanggal" value="${hariIni}"></div>
+                            <div style="flex:2; min-width:180px;"><label>Mata Pelajaran & Kelas</label><select id="jurnal-kelas">${opsiKelas}</select></div>
+                        </div>
+                        <div style="${kotak}">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                                <h3 style="${h3} margin-bottom:0;">📘 Intrakurikuler</h3>
+                                <button class="btn-outline" onclick="syncRPP()">🔄 Ambil dari ATP/Modul</button>
                             </div>
-                            <button class="btn-outline" onclick="syncRPP()">🔄 Ambil dari ATP/Modul</button>
+                            <div class="form-group"><label>Materi / Tujuan Pembelajaran</label><input type="text" id="jurnal-topik" placeholder="Otomatis terisi jika klik tombol Ambil dari ATP/Modul..."></div>
+                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Pembelajaran</label><textarea id="jurnal-kegiatan" rows="2"></textarea></div>
                         </div>
-                        <div class="form-group"><label>Materi / TP</label><input type="text" id="jurnal-topik" placeholder="Otomatis terisi jika klik tombol Sinkronisasi..."></div>
-                        <div class="form-group"><label>Evaluasi / Catatan Diferensiasi</label><textarea id="jurnal-catatan" rows="3"></textarea></div>
-                    </div>
-
-                    <div id="tab-p5" style="display:none;">
-                        <div class="form-group">
-                            <label>Tema Proyek & Dimensi</label>
-                            <select style="margin-bottom:10px;"><option>Gaya Hidup Berkelanjutan</option><option>Kearifan Lokal</option></select>
-                            <select><option>Dimensi: Bernalar Kritis</option><option>Dimensi: Gotong Royong</option></select>
+                        <div style="${kotak}">
+                            <h3 style="${h3}">🌱 Kokurikuler</h3>
+                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Kokurikuler (jika ada)</label><textarea id="jurnal-koku" rows="2"></textarea></div>
                         </div>
-                        <div class="form-group"><label>Aktivitas Observasi Hari Ini</label><textarea rows="2" placeholder="Siswa memilah sampah organik..."></textarea></div>
-                    </div>
-
-                    <button class="btn-submit" onclick="showToast('Jurnal berhasil disinkronkan ke server!'); document.getElementById('dot-jurnal').style.display='none'; setTimeout(()=>loadContent('home'), 1500);">Kirim Jurnal</button>
-                `
+                        <div class="form-group"><label>Catatan & Refleksi</label><textarea id="jurnal-catatan" rows="3" placeholder="Evaluasi, catatan diferensiasi, tindak lanjut..."></textarea></div>
+                        <button class="btn-submit" onclick="simpanJurnal()">Simpan Jurnal</button>
+                    `;
+                }
             },
             nilai: {
                 url: "Modul Asesmen / Rekap Nilai Formatif & Sumatif",
@@ -459,6 +471,56 @@
                         <button class="btn-export" style="flex:1;" onclick="exportToExcel()">📥 Unduh Format Excel (Untuk RDM/E-Rapor)</button>
                     </div>
                 `
+            },
+            kelola: {
+                url: "Dashboard / Kelola Kelas & Siswa",
+                getHtml: async () => {
+                    const judul = '<h2 class="view-title">Kelola Kelas & Siswa</h2>';
+                    if (!sb) return judul + '<p style="color:var(--text-muted);">Fitur ini membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
+                    const [k, s2, g] = await Promise.all([
+                        sb.from('kelas').select('id, nama, tahun_ajaran').order('nama'),
+                        sb.from('siswa').select('id, kelas_id, nis, nama').order('nama'),
+                        sb.from('guru').select('nama').maybeSingle()
+                    ]);
+                    if (k.error || s2.error) return judul + '<p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
+                    const kelas = k.data, siswa = s2.data;
+                    if (!kelas.some(x => x.id === window.kelolaKelas)) window.kelolaKelas = kelas.length ? kelas[0].id : null;
+                    const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:14px; background:var(--card-bg);';
+                    const h3 = 'color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;';
+                    const jumlah = (id) => siswa.filter(x => x.kelas_id === id).length;
+                    const baris = 'display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--browser-border);';
+                    const daftarKelas = kelas.length ? kelas.map(x => `<div style="${baris}"><div><strong>${esc(x.nama)}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">${esc(x.tahun_ajaran || '')} • ${jumlah(x.id)} siswa</span></div><div style="display:flex; gap:6px;"><button class="btn-outline" onclick="pilihKelas('${x.id}')">${x.id === window.kelolaKelas ? '✔ Dipilih' : 'Pilih'}</button><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusKelas('${x.id}')">🗑️</button></div></div>`).join('') : '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
+                    const kel = kelas.find(x => x.id === window.kelolaKelas);
+                    let bagianSiswa = '<p style="color:var(--text-muted);">Tambahkan kelas terlebih dahulu.</p>';
+                    if (kel) {
+                        const ds = siswa.filter(x => x.kelas_id === kel.id);
+                        bagianSiswa = `
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                                <input id="sw-nis" placeholder="NIS" style="flex:1; min-width:100px;">
+                                <input id="sw-nama" placeholder="Nama siswa" style="flex:3; min-width:160px;">
+                                <button class="btn-outline" onclick="tambahSiswa()">+ Tambah</button>
+                            </div>
+                            <textarea id="sw-bulk" rows="3" placeholder="Impor banyak siswa: satu per baris, format  NIS, Nama  (bisa tempel dari Excel)"></textarea>
+                            <button class="btn-outline" style="margin:8px 0 12px;" onclick="imporSiswa()">⬆️ Impor Daftar</button>
+                            <div style="max-height:260px; overflow:auto;">
+                                <table><tr><th>No</th><th>NIS</th><th>Nama</th><th></th></tr>
+                                ${ds.length ? ds.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.nis)}</td><td>${esc(x.nama)}</td><td><button class="btn-outline" style="padding:2px 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusSiswa('${x.id}')">🗑️</button></td></tr>`).join('') : '<tr><td colspan="4" style="color:var(--text-muted);">Belum ada siswa di kelas ini.</td></tr>'}
+                                </table>
+                            </div>`;
+                    }
+                    return `
+                        ${judul}
+                        <div style="${box}"><h3 style="${h3}">👤 Profil Guru</h3>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;"><input id="kl-nama" value="${esc(g.data?.nama || '')}" placeholder="Nama lengkap beserta gelar" style="flex:1; min-width:200px;"><button class="btn-outline" onclick="simpanNama()">Simpan</button></div>
+                            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">Mata pelajaran: Matematika</p>
+                        </div>
+                        <div style="${box}"><h3 style="${h3}">🏫 Kelas</h3>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;"><input id="kl-kelas" placeholder="Nama kelas, mis. X-1" style="flex:2; min-width:140px;"><input id="kl-tahun" value="2026/2027" style="flex:1; min-width:100px;"><button class="btn-outline" onclick="tambahKelas()">+ Tambah</button></div>
+                            ${daftarKelas}
+                        </div>
+                        <div style="${box}"><h3 style="${h3}">🎒 Siswa${kel ? ' — ' + esc(kel.nama) : ''}</h3>${bagianSiswa}</div>
+                    `;
+                }
             },
             jadwal: {
                 url: "Modul Siswa / Jadwal Pelajaran",
@@ -577,7 +639,7 @@
 
         // === KUNCI MENU: hanya Modul (MPI) terbuka untuk murid ===
         const GURU_PIN = '123456'; // GANTI PIN INI
-        const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai'];
+        const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai', 'kelola'];
         let guruAuth = false;
         let pendingMenu = null;
         if (!sb) { try { guruAuth = sessionStorage.getItem('guruAuth') === '1'; } catch (e) {} }
@@ -600,8 +662,9 @@
         }
         async function cekGuru(user) {
             if (!sb || !user) return false;
-            const { data, error } = await sb.from('guru').select('user_id').eq('user_id', user.id).maybeSingle();
-            return !error && !!data;
+            const { data, error } = await sb.from('guru').select('user_id, nama').eq('user_id', user.id).maybeSingle();
+            if (!error && data) { window.guruNama = data.nama || ''; return true; }
+            return false;
         }
         async function submitPin() {
             const input = document.getElementById('pin-input');
@@ -623,7 +686,7 @@
                 applyGuruMode();
                 const target = pendingMenu || 'home';
                 closePin();
-                showToast('Mode guru aktif. Selamat datang, Pak Budi!');
+                showToast('Mode guru aktif. Selamat datang' + (window.guruNama ? ', ' + window.guruNama : '') + '!');
                 renderContent(target);
             } else {
                 err.textContent = pesan;
@@ -669,6 +732,76 @@
                 }
                 if (menu === 'info') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
             }
+        }
+
+        // === KELOLA DATA (guru) ===
+        async function kelolaAksi(promise, pesanOk) {
+            const { error } = await promise;
+            if (error) { showToast('Gagal: ' + error.message, true); return false; }
+            showToast(pesanOk);
+            return true;
+        }
+        async function simpanNama() {
+            const nama = document.getElementById('kl-nama').value.trim();
+            if (!nama) { showToast('Nama tidak boleh kosong.', true); return; }
+            const { data: { user } } = await sb.auth.getUser();
+            const { data, error } = await sb.from('guru').update({ nama }).eq('user_id', user.id).select();
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            if (!data.length) { showToast('Belum diizinkan. Jalankan supabase_patch_1.sql di SQL Editor Supabase.', true); return; }
+            window.guruNama = nama;
+            showToast('Nama guru disimpan.');
+            renderContent('kelola');
+        }
+        async function tambahKelas() {
+            const nama = document.getElementById('kl-kelas').value.trim();
+            const tahun = document.getElementById('kl-tahun').value.trim();
+            if (!nama) { showToast('Isi nama kelas dahulu.', true); return; }
+            if (await kelolaAksi(sb.from('kelas').insert({ nama, tahun_ajaran: tahun || null }), 'Kelas ditambahkan.')) renderContent('kelola');
+        }
+        function pilihKelas(id) { window.kelolaKelas = id; renderContent('kelola'); }
+        async function hapusKelas(id) {
+            if (!confirm('Hapus kelas ini beserta seluruh siswa, absensi, dan nilainya?')) return;
+            if (await kelolaAksi(sb.from('kelas').delete().eq('id', id), 'Kelas dihapus.')) renderContent('kelola');
+        }
+        async function tambahSiswa() {
+            const nis = document.getElementById('sw-nis').value.trim();
+            const nama = document.getElementById('sw-nama').value.trim();
+            if (!nis || !nama) { showToast('NIS dan nama wajib diisi.', true); return; }
+            if (await kelolaAksi(sb.from('siswa').insert({ kelas_id: window.kelolaKelas, nis, nama }), 'Siswa ditambahkan.')) renderContent('kelola');
+        }
+        async function imporSiswa() {
+            const teks = document.getElementById('sw-bulk').value;
+            const rows = [], gagal = [];
+            teks.split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(l => {
+                const p = l.split(/\t|;|,/).map(x => x.trim()).filter(Boolean);
+                if (p.length >= 2 && p[0].toLowerCase() !== 'nis') rows.push({ kelas_id: window.kelolaKelas, nis: p[0], nama: p.slice(1).join(' ') });
+                else if (p[0] && p[0].toLowerCase() !== 'nis') gagal.push(l);
+            });
+            if (!rows.length) { showToast('Tidak ada baris valid. Gunakan format: NIS, Nama.', true); return; }
+            const ok = await kelolaAksi(sb.from('siswa').upsert(rows, { onConflict: 'kelas_id,nis' }), rows.length + ' siswa diimpor' + (gagal.length ? ', ' + gagal.length + ' baris dilewati.' : '.'));
+            if (ok) renderContent('kelola');
+        }
+        async function hapusSiswa(id) {
+            if (!confirm('Hapus siswa ini beserta absensi dan nilainya?')) return;
+            if (await kelolaAksi(sb.from('siswa').delete().eq('id', id), 'Siswa dihapus.')) renderContent('kelola');
+        }
+
+        // === DAILY JOURNAL ===
+        async function simpanJurnal() {
+            const v = (id) => (document.getElementById(id)?.value || '').trim();
+            const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            const isi = { tanggal: v('jurnal-tanggal') || hariIni, materi: v('jurnal-topik'), kegiatan: v('jurnal-kegiatan'), kokurikuler: v('jurnal-koku'), refleksi: v('jurnal-catatan') };
+            if (!isi.materi && !isi.kokurikuler) { showToast('Isi materi intrakurikuler atau kegiatan kokurikuler dahulu.', true); return; }
+            if (sb) {
+                const { error } = await sb.from('jurnal').insert({ ...isi, kelas_id: v('jurnal-kelas') || null, jenis: 'harian' });
+                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_2.sql bila kolom belum ada)', true); return; }
+                showToast('Jurnal tersimpan.');
+            } else {
+                showToast('Jurnal berhasil disinkronkan ke server!');
+            }
+            const dot = document.getElementById('dot-jurnal');
+            if (dot) dot.style.display = 'none';
+            setTimeout(() => loadContent('home'), 1500);
         }
 
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
