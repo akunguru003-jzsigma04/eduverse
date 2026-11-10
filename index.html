@@ -201,6 +201,7 @@
             .menu-text { font-size: 0.6rem; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
     <div class="bg-decor"></div>
@@ -243,7 +244,8 @@
             <div style="font-size:2.5rem;">🔐</div>
             <h3 id="pin-title">Akses Khusus Guru</h3>
             <p>Menu ini hanya dapat dibuka oleh guru. Masukkan PIN untuk melanjutkan.</p>
-            <input type="password" id="pin-input" inputmode="numeric" maxlength="12" placeholder="PIN" autocomplete="off" onkeydown="if(event.key==='Enter') submitPin()">
+            <input type="email" id="login-email" placeholder="Email guru" autocomplete="username" style="display:none; margin-bottom:8px; letter-spacing:normal; font-size:1rem;">
+            <input type="password" id="pin-input" placeholder="Kata sandi" autocomplete="current-password" onkeydown="if(event.key==='Enter') submitPin()" style="letter-spacing:normal; font-size:1rem;">
             <div class="pin-error" id="pin-error"></div>
             <div class="pin-actions">
                 <button class="btn-outline" onclick="closePin()">Batal</button>
@@ -433,18 +435,32 @@
             },
             jadwal: {
                 url: "Modul Siswa / Jadwal Pelajaran",
-                getHtml: () => {
+                getHtml: async () => {
                     const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
                     const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
                     const dow = new Date().getDay();
                     const sel = (dow >= 1 && dow <= 5) ? dow - 1 : -1;
-                    const mapel = [
+                    let mapel = [
                         ['Fisika', 'Fisika', 'Matematika', 'Matematika', 'B. Indonesia', 'B. Indonesia', 'Kimia', 'Kimia'],
                         ['Biologi', 'Biologi', 'B. Inggris', 'B. Inggris', 'Fisika', 'Fisika', 'Informatika', 'Informatika'],
                         ['Matematika', 'Matematika', 'Kimia', 'Kimia', 'Sejarah', 'Sejarah', 'P5', 'P5'],
                         ['B. Indonesia', 'B. Indonesia', 'Fisika', 'Fisika', 'PJOK', 'PJOK', 'Biologi', 'Biologi'],
                         ['PAI', 'PAI', 'B. Inggris', 'B. Inggris', 'Matematika', 'Informatika', '-', '-']
                     ];
+                    let kelasNama = 'X-MIPA 1';
+                    if (sb) {
+                        const { data, error } = await sb.from('jadwal').select('hari, jam_ke, mapel, kelas(nama)').order('hari').order('jam_ke');
+                        const judul = '<h2 class="view-title">Jadwal Pelajaran</h2>';
+                        if (error) return judul + '<p style="color:#b91c1c;">Gagal memuat jadwal. Periksa koneksi, lalu coba lagi.</p>';
+                        if (!data.length) return judul + '<p style="color:var(--text-muted);">Jadwal belum diisi oleh guru.</p>';
+                        const daftar = [...new Set(data.map(r => r.kelas.nama))].sort();
+                        if (!window.jadwalKelas || !daftar.includes(window.jadwalKelas)) window.jadwalKelas = daftar[0];
+                        kelasNama = window.jadwalKelas;
+                        mapel = hari.map(() => Array(8).fill('-'));
+                        data.filter(r => r.kelas.nama === kelasNama).forEach(r => {
+                            if (r.hari >= 1 && r.hari <= 5 && r.jam_ke >= 1 && r.jam_ke <= 8) mapel[r.hari - 1][r.jam_ke - 1] = r.mapel;
+                        });
+                    }
                     const rows = [
                         { j: '1', w: '07.00 - 07.45', i: 0 }, { j: '2', w: '07.45 - 08.30', i: 1 }, { j: '3', w: '08.30 - 09.15', i: 2 },
                         { b: 'Istirahat 09.15 - 09.30' },
@@ -454,11 +470,11 @@
                     ];
                     const body = rows.map(r => r.b
                         ? `<tr><td colspan="6" style="background:var(--card-bg); color:var(--text-muted); font-size:0.75rem; font-weight:600;">\u2615 ${r.b}</td></tr>`
-                        : `<tr><td><strong>${r.j}</strong><br><span style="font-size:0.7rem; color:var(--text-muted);">${r.w}</span></td>${mapel.map((d, k) => `<td class="${k === sel ? 'hari-ini' : ''}">${d[r.i]}</td>`).join('')}</tr>`
+                        : `<tr><td><strong>${r.j}</strong><br><span style="font-size:0.7rem; color:var(--text-muted);">${r.w}</span></td>${mapel.map((d, k) => `<td class="${k === sel ? 'hari-ini' : ''}">${esc(d[r.i])}</td>`).join('')}</tr>`
                     ).join('');
                     return `
                         <h2 class="view-title">Jadwal Pelajaran</h2>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Kelas X-MIPA 1 \u2022 Semester Ganjil 2026/2027 \u2022 Hari ini: <strong>${namaHari[dow]}</strong></p>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Kelas ${esc(kelasNama)} \u2022 Semester Ganjil 2026/2027 \u2022 Hari ini: <strong>${namaHari[dow]}</strong></p>
                         <div style="overflow-x:auto;">
                             <table class="jadwal">
                                 <tr><th style="width:90px;">Jam</th>${hari.map((h, k) => `<th class="${k === sel ? 'hari-ini' : ''}">${h}</th>`).join('')}</tr>
@@ -470,25 +486,36 @@
             },
             info: {
                 url: "Modul Siswa / Pengumuman & Tugas",
-                getHtml: () => {
+                getHtml: async () => {
                     const fmt = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }); };
                     const card = 'padding:12px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:10px; background:var(--card-bg);';
-                    const pengumuman = [
+                    let pengumuman = [
                         { judul: 'Sumatif Tengah Semester', isi: 'Cakupan materi Bab 1-3. Kisi-kisi dan latihan soal tersedia di menu Modul (MPI).', tag: 'Penting', warna: 'background:#fee2e2; color:#b91c1c;' },
                         { judul: 'Kegiatan P5: Gaya Hidup Berkelanjutan', isi: 'Setiap siswa membawa botol minum dan wadah makan sendiri selama pekan proyek.', tag: 'P5', warna: 'background:#dcfce7; color:#166534;' },
                         { judul: 'Pembagian Kelompok Praktikum', isi: 'Kelompok praktikum Fisika sudah ditentukan. Cek dengan wali kelas.', tag: 'Info', warna: 'background:#dbeafe; color:#1e40af;' }
                     ];
-                    const tugas = [
+                    let tugas = [
                         { mapel: 'Fisika', judul: 'Latihan Soal Vektor Posisi (hal. 24)', n: 2 },
                         { mapel: 'Matematika', judul: 'Rangkuman Trigonometri', n: 5 },
                         { mapel: 'Biologi', judul: 'Laporan Observasi Sampah Organik (P5)', n: 9 }
                     ];
+                    if (sb) {
+                        const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                        const [pg, tg] = await Promise.all([
+                            sb.from('pengumuman').select('judul, isi, tag').eq('aktif', true).order('dibuat_pada', { ascending: false }).limit(20),
+                            sb.from('tugas').select('mapel, judul, tenggat').gte('tenggat', hariIni).order('tenggat').limit(30)
+                        ]);
+                        if (pg.error || tg.error) return '<h2 class="view-title">Pengumuman & Tugas</h2><p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
+                        const warnaTag = { Penting: 'background:#fee2e2; color:#b91c1c;', P5: 'background:#dcfce7; color:#166534;' };
+                        pengumuman = pg.data.map(p => ({ judul: p.judul, isi: p.isi || '', tag: p.tag, warna: warnaTag[p.tag] || 'background:#dbeafe; color:#1e40af;' }));
+                        tugas = tg.data.map(t => ({ mapel: t.mapel, judul: t.judul, n: Math.round((new Date(t.tenggat + 'T00:00:00') - new Date(new Date().toDateString())) / 86400000) }));
+                    }
                     return `
                         <h2 class="view-title">Pengumuman & Tugas</h2>
                         <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin-bottom:10px;">\ud83d\udce2 Pengumuman</h3>
-                        ${pengumuman.map(p => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${p.judul}</strong><span class="badge" style="${p.warna} margin-top:0;">${p.tag}</span></div><p style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${p.isi}</p></div>`).join('')}
+                        ${pengumuman.map(p => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${esc(p.judul)}</strong><span class="badge" style="${p.warna} margin-top:0;">${esc(p.tag)}</span></div><p style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${esc(p.isi)}</p></div>`).join('')}
                         <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin:20px 0 10px;">\ud83d\udcdd Tugas</h3>
-                        ${tugas.map(t => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${t.judul}</strong>${t.n <= 2 ? '<span class="badge" style="background:#fee2e2; color:#b91c1c; margin-top:0;">\u23f0 Segera</span>' : ''}</div><p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">${t.mapel} \u2022 Tenggat: ${fmt(t.n)}</p></div>`).join('')}
+                        ${tugas.map(t => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${esc(t.judul)}</strong>${t.n <= 2 ? '<span class="badge" style="background:#fee2e2; color:#b91c1c; margin-top:0;">\u23f0 Segera</span>' : ''}</div><p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">${esc(t.mapel)} \u2022 Tenggat: ${fmt(t.n)}</p></div>`).join('')}
                     `;
                 }
             },
@@ -512,12 +539,21 @@
         }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDashboard(); });
 
+        // === KONEKSI SUPABASE ===
+        const SUPABASE_URL = 'https://kixsowgdtzptaewjfjlg.supabase.co';
+        const SUPABASE_ANON_KEY = 'ISI_KUNCI_ANON_DI_SINI'; // tempel kunci "anon public" dari Project Settings > API
+        let sb = null;
+        try {
+            if (window.supabase && !SUPABASE_ANON_KEY.startsWith('ISI_')) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) { console.error(e); }
+        const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
         // === KUNCI MENU: hanya Modul (MPI) terbuka untuk murid ===
         const GURU_PIN = '123456'; // GANTI PIN INI
         const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai'];
         let guruAuth = false;
         let pendingMenu = null;
-        try { guruAuth = sessionStorage.getItem('guruAuth') === '1'; } catch (e) {}
+        if (!sb) { try { guruAuth = sessionStorage.getItem('guruAuth') === '1'; } catch (e) {} }
 
         function applyGuruMode() { document.body.classList.toggle('guru-mode', guruAuth); }
 
@@ -526,6 +562,8 @@
             const input = document.getElementById('pin-input');
             input.value = '';
             document.getElementById('pin-error').textContent = '';
+            document.getElementById('login-email').style.display = sb ? 'block' : 'none';
+            input.placeholder = sb ? 'Kata sandi' : 'PIN (mode demo)';
             document.getElementById('pin-modal').classList.add('show');
             setTimeout(() => input.focus(), 50);
         }
@@ -533,30 +571,53 @@
             document.getElementById('pin-modal').classList.remove('show');
             pendingMenu = null;
         }
-        function submitPin() {
+        async function cekGuru(user) {
+            if (!sb || !user) return false;
+            const { data, error } = await sb.from('guru').select('user_id').eq('user_id', user.id).maybeSingle();
+            return !error && !!data;
+        }
+        async function submitPin() {
             const input = document.getElementById('pin-input');
-            if (input.value === GURU_PIN) {
+            const err = document.getElementById('pin-error');
+            let ok = false, pesan = 'PIN salah. Silakan coba lagi.';
+            if (sb) {
+                err.textContent = 'Memeriksa...';
+                const email = document.getElementById('login-email').value.trim();
+                const { data, error } = await sb.auth.signInWithPassword({ email, password: input.value });
+                if (error) { pesan = 'Email atau kata sandi salah.'; }
+                else if (await cekGuru(data.user)) { ok = true; }
+                else { await sb.auth.signOut(); pesan = 'Akun ini bukan akun guru.'; }
+            } else {
+                ok = (input.value === GURU_PIN);
+            }
+            if (ok) {
                 guruAuth = true;
-                try { sessionStorage.setItem('guruAuth', '1'); } catch (e) {}
+                if (!sb) { try { sessionStorage.setItem('guruAuth', '1'); } catch (e) {} }
                 applyGuruMode();
                 const target = pendingMenu || 'home';
                 closePin();
                 showToast('Mode guru aktif. Selamat datang, Pak Budi!');
                 renderContent(target);
             } else {
-                document.getElementById('pin-error').textContent = 'PIN salah. Silakan coba lagi.';
+                err.textContent = pesan;
                 input.value = '';
                 const card = document.getElementById('pin-card');
                 card.classList.remove('shake'); card.offsetWidth; card.classList.add('shake');
                 input.focus();
             }
         }
-        function lockGuru() {
+        async function lockGuru() {
             guruAuth = false;
+            if (sb) { try { await sb.auth.signOut(); } catch (e) {} }
             try { sessionStorage.removeItem('guruAuth'); } catch (e) {}
             applyGuruMode();
             closeDashboard();
             showToast('Mode guru dikunci kembali.');
+        }
+        if (sb) {
+            sb.auth.getSession().then(async ({ data }) => {
+                if (data.session && await cekGuru(data.session.user)) { guruAuth = true; applyGuruMode(); }
+            });
         }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePin(); });
 
@@ -571,7 +632,14 @@
                 urlArea.innerHTML = appData[menu].url;
                 contentArea.style.animation = 'none'; contentArea.offsetHeight; 
                 contentArea.style.animation = 'slideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
-                contentArea.innerHTML = appData[menu].getHtml();
+                const token = (window.renderToken = (window.renderToken || 0) + 1);
+                const out = appData[menu].getHtml();
+                if (out && typeof out.then === 'function') {
+                    contentArea.innerHTML = '<p style="color:var(--text-muted); padding:20px 0;">Memuat data...</p>';
+                    out.then(h => { if (window.renderToken === token) contentArea.innerHTML = h; });
+                } else {
+                    contentArea.innerHTML = out;
+                }
                 if (menu === 'info') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
             }
         }
