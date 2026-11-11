@@ -674,7 +674,7 @@
                 err.textContent = 'Memeriksa...';
                 const email = document.getElementById('login-email').value.trim();
                 const { data, error } = await sb.auth.signInWithPassword({ email, password: input.value });
-                if (error) { pesan = 'Email atau kata sandi salah.'; }
+                if (error) { pesan = /invalid login/i.test(error.message) ? 'Email atau kata sandi salah.' : /not confirmed/i.test(error.message) ? 'Email belum dikonfirmasi. Di Supabase: Authentication > Users > pilih akun > Confirm user.' : 'Gagal masuk: ' + error.message; }
                 else if (await cekGuru(data.user)) { ok = true; }
                 else { await sb.auth.signOut(); pesan = 'Akun ini bukan akun guru.'; }
             } else {
