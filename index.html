@@ -243,8 +243,23 @@
         body.fokus-game header { display: none; }
         @media (max-width: 360px) { .game-opsi { grid-template-columns: 1fr; } }
         @media (orientation: landscape) and (max-height: 500px) { .game-soal { padding: 12px; font-size: 1.2rem; margin: 6px 0 10px; } .game-opsi button { min-height: 48px; } }
+        /* === ABSENSI === */
+        .abs-row { padding: 10px 0; border-bottom: 1px solid var(--browser-border); }
+        .abs-nama { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+        .abs-nama span { font-size: 0.75rem; color: var(--text-muted); }
+        .abs-opsi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .abs-btn { min-height: 44px; font-size: 0.78rem; font-weight: 700; border-radius: 10px; border: 2px solid var(--browser-border); background: var(--card-bg); color: var(--text-main); cursor: pointer; }
+        .abs-btn.aktif.Hadir { background: #dcfce7; border-color: #16a34a; color: #166534; }
+        .abs-btn.aktif.Terlambat { background: #fef3c7; border-color: #d97706; color: #92400e; }
+        .abs-btn.aktif.Sakit { background: #dbeafe; border-color: #2563eb; color: #1e40af; }
+        .abs-btn.aktif.Izin { background: #ede9fe; border-color: #7c3aed; color: #5b21b6; }
+        .abs-cat { margin-top: 6px; width: 100%; }
+        #abs-ringkas { display: flex; gap: 6px; flex-wrap: wrap; }
+        .abs-chip { font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--browser-border); }
+        .abs-chip.Hadir { background: #dcfce7; color: #166534; } .abs-chip.Terlambat { background: #fef3c7; color: #92400e; } .abs-chip.Sakit { background: #dbeafe; color: #1e40af; } .abs-chip.Izin { background: #ede9fe; color: #5b21b6; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="bg-decor"></div>
@@ -264,7 +279,7 @@
             <div class="menu-item" data-angle="215" style="order:1" onclick="loadContent('mpi')"><div class="circle-icon bg-mpi">🪐</div><div class="menu-text">Modul (MPI)</div></div>
             <div class="menu-item" data-angle="180" style="order:2" onclick="loadContent('infokelas')"><div class="circle-icon bg-info">📡<span class="notif-dot" id="dot-info"></span></div><div class="menu-text">Info Kelas</div></div>
             <div class="menu-item" data-angle="145" style="order:3" onclick="loadContent('game')"><div class="circle-icon bg-game">🎮</div><div class="menu-text">Game Belajar</div></div>
-            <div class="menu-item" data-angle="325" style="order:4" onclick="loadContent('absen')"><div class="circle-icon bg-absen">🧑‍🚀<span class="notif-dot" id="dot-absen"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Absensi & Diferensiasi</div></div>
+            <div class="menu-item" data-angle="325" style="order:4" onclick="loadContent('absen')"><div class="circle-icon bg-absen">🧑‍🚀<span class="notif-dot" id="dot-absen"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Absensi</div></div>
         </div>
         <button class="avatar-hub" onclick="loadContent('home')" aria-label="Buka dashboard guru" title="Klik untuk membuka dashboard">
             <div class="avatar-ring"><span class="lock-badge">🔒</span>👨‍🏫</div>
@@ -374,32 +389,79 @@
                 }
             },
             absen: {
-                url: "Modul Siswa / Absensi & Diferensiasi",
-                getHtml: () => `
-                    <h2 class="view-title">Pemetaan Siswa & Absensi</h2>
-                    <table>
-                        <tr><th>Nama Siswa & Gaya Belajar (Asesmen Diagnostik)</th><th style="text-align:center; width: 120px;">Kehadiran</th></tr>
-                        <tr>
-                            <td><strong>Ahmad Budi</strong><br>
-                                <span class="badge badge-visual">👁️ Visual</span> <span class="badge badge-mahir">⭐ Mahir</span>
-                            </td>
-                            <td style="text-align:center;"><input type="checkbox" checked style="width:20px; height:20px;"></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Citra Kirana</strong><br>
-                                <span class="badge badge-auditori">🎧 Auditori</span> <span class="badge" style="background:#f1f5f9; color:#475569;">✓ Cakap</span>
-                            </td>
-                            <td style="text-align:center;"><input type="checkbox" checked style="width:20px; height:20px;"></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Deni Pratama</strong><br>
-                                <span class="badge badge-kinestetik">🏃 Kinestetik</span> <span class="badge" style="background:#fee2e2; color:#b91c1c;">! Intervensi</span>
-                            </td>
-                            <td style="text-align:center;"><button class="btn-alpa" onclick="laporAlpa('Deni Pratama')">Tandai Alpa</button></td>
-                        </tr>
-                    </table>
-                    <button class="btn-submit" style="margin-top: 15px;" onclick="showToast('Absensi & Data Pemetaan tersimpan!'); document.getElementById('dot-absen').style.display='none'; setTimeout(()=>loadContent('home'), 1500);">Simpan Data Kelas</button>
-                `
+                url: "Modul Guru / Absensi",
+                getHtml: async () => {
+                    const judul = '<h2 class="view-title">Absensi</h2>';
+                    if (!sb) return judul + '<p style="color:var(--text-muted);">Absensi membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
+                    const st = (window.absenState = window.absenState || { tab: 'input' });
+                    const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                    st.tanggal = st.tanggal || hariIni;
+                    st.bulan = st.bulan || hariIni.slice(0, 7);
+                    const kr = await sb.from('kelas').select('id, nama').order('nama');
+                    if (kr.error) return judul + '<p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
+                    if (!kr.data.length) return judul + '<p style="color:var(--text-muted);">Belum ada kelas. Tambahkan di Kelola Kelas &amp; Siswa.</p>';
+                    if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
+                    const sw = await sb.from('siswa').select('id, nis, nama').eq('kelas_id', st.kelasId).order('nama');
+                    if (sw.error) return judul + '<p style="color:#b91c1c;">Gagal memuat siswa.</p>';
+                    const siswa = sw.data, ids = siswa.map(x => x.id);
+                    st.jumlah = siswa.length;
+                    const opsiKelas = kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
+                    const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="ubahAbsen('tab','${k}')">${label}</button>`;
+                    const atas = `${judul}<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${tabBtn('input', '📝 Input Harian')}${tabBtn('rekap', '📊 Rekap Bulanan')}</div>`;
+                    if (!siswa.length) return atas + '<p style="color:var(--text-muted);">Belum ada siswa di kelas ini. Tambahkan di Kelola Kelas &amp; Siswa.</p>';
+
+                    if (st.tab === 'rekap') {
+                        const [th, bl] = st.bulan.split('-').map(Number);
+                        const akhir = new Date(th, bl, 0).getDate();
+                        let semua = [], dari = 0;
+                        while (true) {
+                            const { data, error } = await sb.from('absensi').select('siswa_id, status').in('siswa_id', ids).gte('tanggal', st.bulan + '-01').lte('tanggal', st.bulan + '-' + String(akhir).padStart(2, '0')).range(dari, dari + 999);
+                            if (error) return atas + '<p style="color:#b91c1c;">Gagal memuat rekap.</p>';
+                            semua = semua.concat(data);
+                            if (data.length < 1000) break;
+                            dari += 1000;
+                        }
+                        const baris = siswa.map((x, i) => {
+                            const c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0 };
+                            semua.filter(r => r.siswa_id === x.id).forEach(r => { if (c[r.status] !== undefined) c[r.status]++; });
+                            const tot = c.Hadir + c.Terlambat + c.Sakit + c.Izin;
+                            const persen = tot ? Math.round((c.Hadir + c.Terlambat) / tot * 100) + '%' : '-';
+                            return `<tr><td>${i + 1}</td><td>${esc(x.nama)}</td><td>${c.Hadir}</td><td>${c.Terlambat}</td><td>${c.Sakit}</td><td>${c.Izin}</td><td>${persen}</td></tr>`;
+                        }).join('');
+                        return atas + `
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                                <select onchange="ubahAbsen('kelasId', this.value)" style="flex:1; min-width:140px;">${opsiKelas}</select>
+                                <input type="month" value="${st.bulan}" onchange="ubahAbsen('bulan', this.value)" style="flex:1; min-width:140px;">
+                            </div>
+                            <div style="overflow-x:auto;"><table><tr><th>No</th><th>Nama</th><th>Hadir</th><th>Terlambat</th><th>Sakit</th><th>Izin</th><th>% Hadir</th></tr>${baris}</table></div>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">% Hadir = (Hadir + Terlambat) dibagi jumlah hari yang tercatat.</p>`;
+                    }
+
+                    const ab = await sb.from('absensi').select('siswa_id, status, catatan').eq('tanggal', st.tanggal).in('siswa_id', ids);
+                    if (ab.error) return atas + '<p style="color:#b91c1c;">Gagal memuat absensi.</p>';
+                    st.data = {}; st.tersimpan = new Set();
+                    ab.data.forEach(r => { st.data[r.siswa_id] = { s: r.status, c: r.catatan || '' }; st.tersimpan.add(r.siswa_id); });
+                    const baris = siswa.map((x, i) => {
+                        const cur = st.data[x.id];
+                        return `<div class="abs-row" id="ar-${x.id}">
+                            <div class="abs-nama"><strong>${i + 1}. ${esc(x.nama)}</strong><span>${esc(x.nis)}</span></div>
+                            <div class="abs-opsi">${ABSEN_STATUS.map(([n, ik]) => `<button class="abs-btn ${cur && cur.s === n ? 'aktif ' + n : ''}" data-s="${n}" onclick="setAbsen('${x.id}','${n}')">${ik} ${n}</button>`).join('')}</div>
+                            <input class="abs-cat" id="ac-${x.id}" placeholder="Keterangan (opsional)" value="${esc(cur ? cur.c : '')}" oninput="absenCatatan('${x.id}', this.value)" style="display:${cur && cur.s !== 'Hadir' ? 'block' : 'none'};">
+                        </div>`;
+                    }).join('');
+                    return atas + `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                            <input type="date" value="${st.tanggal}" onchange="ubahAbsen('tanggal', this.value)" style="flex:1; min-width:140px;">
+                            <select onchange="ubahAbsen('kelasId', this.value)" style="flex:1; min-width:140px;">${opsiKelas}</select>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                            <div id="abs-ringkas"></div>
+                            <button class="btn-outline" onclick="semuaHadir()">✔ Semua Hadir</button>
+                        </div>
+                        ${baris}
+                        <button class="btn-submit" style="margin-top:12px;" onclick="simpanAbsensi()">Simpan Absensi</button>
+                    `;
+                }
             },
             jurnal: {
                 url: "Modul Guru / Daily Journal",
@@ -519,6 +581,15 @@
                                 <input id="sw-nis" placeholder="NIS" style="flex:1; min-width:100px;">
                                 <input id="sw-nama" placeholder="Nama siswa" style="flex:3; min-width:160px;">
                                 <button class="btn-outline" onclick="tambahSiswa()">+ Tambah</button>
+                            </div>
+                            <div style="padding:10px; border:1px dashed var(--browser-border); border-radius:8px; margin-bottom:12px;">
+                                <strong style="font-size:0.9rem;">📗 Impor dari Excel</strong>
+                                <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Kolom NIS dan Nama, baris pertama berisi judul. Format .xlsx, .xls, atau .csv.</p>
+                                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                    <input type="file" id="sw-file" accept=".xlsx,.xls,.csv" onchange="bacaExcel(this)" style="flex:1; min-width:180px;">
+                                    <button class="btn-outline" onclick="unduhTemplateSiswa()">⬇️ Template</button>
+                                </div>
+                                <div id="sw-excel-preview"></div>
                             </div>
                             <textarea id="sw-bulk" rows="3" placeholder="Impor banyak siswa: satu per baris, format  NIS, Nama  (bisa tempel dari Excel)"></textarea>
                             <button class="btn-outline" style="margin:8px 0 12px;" onclick="imporSiswa()">⬆️ Impor Daftar</button>
@@ -796,7 +867,7 @@
                 const out = appData[menu].getHtml();
                 if (out && typeof out.then === 'function') {
                     contentArea.innerHTML = '<p style="color:var(--text-muted); padding:20px 0;">Memuat data...</p>';
-                    out.then(h => { if (window.renderToken === token) contentArea.innerHTML = h; });
+                    out.then(h => { if (window.renderToken === token) { contentArea.innerHTML = h; if (menu === 'absen' && document.getElementById('abs-ringkas')) hitungAbsen(); } });
                 } else {
                     contentArea.innerHTML = out;
                 }
@@ -894,6 +965,108 @@
             showToast('Ini hanya pratinjau tata letak. Isi game dibuat pada tahap berikutnya.');
         }
         function toggleSuara(btn) { btn.textContent = btn.textContent.includes('mati') ? '🔊 Suara menyala' : '🔇 Suara mati'; }
+
+        // === IMPOR SISWA DARI EXCEL ===
+        function unduhTemplateSiswa() {
+            if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
+            const ws = XLSX.utils.aoa_to_sheet([['NIS', 'Nama'], ['1001', 'Contoh Siswa Satu'], ['1002', 'Contoh Siswa Dua']]);
+            ws['!cols'] = [{ wch: 14 }, { wch: 34 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Siswa');
+            XLSX.writeFile(wb, 'template_siswa.xlsx');
+        }
+        function bacaExcel(input) {
+            const f = input.files[0];
+            if (!f) return;
+            if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
+            const box = document.getElementById('sw-excel-preview');
+            const rd = new FileReader();
+            rd.onload = (e) => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const baris = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: false });
+                    const isNis = (c) => /^(nis|nisn|no[. ]*induk)$/i.test(String(c).trim());
+                    const isNama = (c) => /^nama/i.test(String(c).trim());
+                    let iNis = 0, iNama = 1, mulai = 0;
+                    const h = baris.findIndex(r => r.some(isNis) && r.some(isNama));
+                    if (h >= 0) { iNis = baris[h].findIndex(isNis); iNama = baris[h].findIndex(isNama); mulai = h + 1; }
+                    const peta = new Map();
+                    let lewat = 0, dobel = 0;
+                    baris.slice(mulai).forEach(r => {
+                        const nis = String(r[iNis] ?? '').trim();
+                        const nama = String(r[iNama] ?? '').trim();
+                        if (!nis && !nama) return;
+                        if (!nis || !nama) { lewat++; return; }
+                        if (peta.has(nis)) dobel++;
+                        peta.set(nis, nama);
+                    });
+                    const rows = Array.from(peta, ([nis, nama]) => ({ nis, nama }));
+                    window.excelSiswa = rows;
+                    if (!rows.length) { box.innerHTML = '<p style="color:#b91c1c; font-size:0.85rem; margin-top:8px;">Tidak ada data siswa yang terbaca. Pastikan ada kolom NIS dan Nama.</p>'; return; }
+                    const prev = rows.slice(0, 5).map(r => `<tr><td>${esc(r.nis)}</td><td>${esc(r.nama)}</td></tr>`).join('');
+                    box.innerHTML = `<p style="margin:10px 0 6px; font-size:0.85rem;"><strong>${rows.length}</strong> siswa terbaca${lewat ? ', ' + lewat + ' baris dilewati (NIS atau nama kosong)' : ''}${dobel ? ', ' + dobel + ' NIS ganda digabung' : ''}.</p><table><tr><th>NIS</th><th>Nama</th></tr>${prev}</table>${rows.length > 5 ? '<p style="font-size:0.75rem; color:var(--text-muted);">…dan ' + (rows.length - 5) + ' lainnya</p>' : ''}<button class="btn-submit" style="margin-top:8px;" onclick="konfirmasiExcel()">Impor ${rows.length} Siswa ke Kelas Ini</button>`;
+                } catch (err) {
+                    showToast('File tidak dapat dibaca: ' + err.message, true);
+                }
+            };
+            rd.readAsArrayBuffer(f);
+        }
+        async function konfirmasiExcel() {
+            const rows = (window.excelSiswa || []).map(r => ({ kelas_id: window.kelolaKelas, nis: r.nis, nama: r.nama }));
+            if (!rows.length || !window.kelolaKelas) { showToast('Tidak ada data untuk diimpor.', true); return; }
+            for (let i = 0; i < rows.length; i += 500) {
+                const { error } = await sb.from('siswa').upsert(rows.slice(i, i + 500), { onConflict: 'kelas_id,nis' });
+                if (error) { showToast('Gagal mengimpor: ' + error.message, true); return; }
+            }
+            window.excelSiswa = [];
+            showToast(rows.length + ' siswa berhasil diimpor.');
+            renderContent('kelola');
+        }
+
+        // === ABSENSI: Hadir, Terlambat, Sakit, Izin ===
+        const ABSEN_STATUS = [['Hadir', '✔'], ['Terlambat', '⏰'], ['Sakit', '🤒'], ['Izin', '📝']];
+        function ubahAbsen(k, v) { window.absenState[k] = v; renderContent('absen'); }
+        function hitungAbsen() {
+            const st = window.absenState, c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0 };
+            Object.values(st.data).forEach(v => { if (v && v.s) c[v.s]++; });
+            const isi = c.Hadir + c.Terlambat + c.Sakit + c.Izin;
+            document.getElementById('abs-ringkas').innerHTML = ABSEN_STATUS.map(([n, ik]) => `<span class="abs-chip ${n}">${ik} ${n}: ${c[n]}</span>`).join('') + `<span class="abs-chip">Belum: ${st.jumlah - isi}</span>`;
+        }
+        function setAbsen(id, n) {
+            const st = window.absenState, cur = st.data[id];
+            const baru = (cur && cur.s === n) ? null : n;
+            st.data[id] = baru ? { s: baru, c: cur ? cur.c : '' } : undefined;
+            const row = document.getElementById('ar-' + id);
+            row.querySelectorAll('.abs-btn').forEach(b => { b.className = 'abs-btn' + (b.dataset.s === baru ? ' aktif ' + baru : ''); });
+            document.getElementById('ac-' + id).style.display = (baru && baru !== 'Hadir') ? 'block' : 'none';
+            hitungAbsen();
+        }
+        function absenCatatan(id, v) { const d = window.absenState.data[id]; if (d) d.c = v; }
+        function semuaHadir() {
+            const st = window.absenState;
+            document.querySelectorAll('.abs-row').forEach(r => {
+                const id = r.id.slice(3);
+                if (!st.data[id]) setAbsen(id, 'Hadir');
+            });
+        }
+        async function simpanAbsensi() {
+            const st = window.absenState;
+            const rows = Object.entries(st.data).filter(([, v]) => v && v.s).map(([siswa_id, v]) => ({ siswa_id, tanggal: st.tanggal, status: v.s, catatan: v.s === 'Hadir' ? null : (v.c || null) }));
+            const hapus = Array.from(st.tersimpan).filter(id => !(st.data[id] && st.data[id].s));
+            if (!rows.length && !hapus.length) { showToast('Belum ada status yang dipilih.', true); return; }
+            if (hapus.length) {
+                const { error } = await sb.from('absensi').delete().in('siswa_id', hapus).eq('tanggal', st.tanggal);
+                if (error) { showToast('Gagal menyimpan: ' + error.message, true); return; }
+            }
+            if (rows.length) {
+                const { error } = await sb.from('absensi').upsert(rows, { onConflict: 'siswa_id,tanggal' });
+                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_3.sql bila status ditolak)', true); return; }
+            }
+            st.tersimpan = new Set(rows.map(r => r.siswa_id));
+            const dot = document.getElementById('dot-absen');
+            if (dot) dot.style.display = 'none';
+            showToast('Absensi tersimpan (' + rows.length + ' siswa).');
+        }
 
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
         const orbitMQ = window.matchMedia('(min-width: 1100px)');
