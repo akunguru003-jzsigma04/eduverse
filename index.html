@@ -223,6 +223,26 @@
         .bg-jurnal { background: linear-gradient(135deg, #a855f7, #7c3aed); }
         .bg-nilai { background: linear-gradient(135deg, #fbc531, #f59e0b); }
         @media (max-width: 480px) { .logo { width: 36px; height: 36px; } }
+        /* === GAME BELAJAR: TATA LETAK === */
+        .bg-game { background: linear-gradient(135deg, #22c55e, #14b8a6); }
+        .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+        .game-card { border: 1px solid var(--browser-border); border-radius: 12px; padding: 16px; background: var(--card-bg); display: flex; flex-direction: column; gap: 8px; text-align: left; }
+        .game-card .ikon { font-size: 2rem; }
+        .game-card .bintang { color: #f59e0b; letter-spacing: 2px; }
+        .game-card button { margin-top: auto; }
+        .game-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .game-progres { flex: 1; height: 10px; border-radius: 6px; background: var(--browser-border); overflow: hidden; }
+        .game-progres > div { height: 100%; background: linear-gradient(90deg, #4ba3e3, #8b5cf6); transition: width 0.3s; }
+        .game-soal { text-align: center; font-size: 1.6rem; font-weight: 700; padding: 28px 12px; margin: 10px 0 16px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--browser-border); }
+        .game-opsi { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .game-opsi button { min-height: 56px; font-size: 1.1rem; font-weight: 700; border-radius: 12px; border: 2px solid var(--browser-border); background: var(--card-bg); color: var(--text-main); cursor: pointer; }
+        .game-opsi button.benar { border-color: #16a34a; background: #dcfce7; color: #166534; }
+        .game-opsi button.salah { border-color: #dc2626; background: #fee2e2; color: #991b1b; }
+        .portal-wrapper.fokus .orbit-svg, .portal-wrapper.fokus .menu-item, .portal-wrapper.fokus .menu-column { display: none !important; }
+        .portal-wrapper.fokus .browser-window { width: 100%; max-width: 920px; min-height: 70vh; }
+        body.fokus-game header { display: none; }
+        @media (max-width: 360px) { .game-opsi { grid-template-columns: 1fr; } }
+        @media (orientation: landscape) and (max-height: 500px) { .game-soal { padding: 12px; font-size: 1.2rem; margin: 6px 0 10px; } .game-opsi button { min-height: 48px; } }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
@@ -242,8 +262,8 @@
         <svg class="orbit-svg" aria-hidden="true"><path id="orbit-path"></path></svg>
         <div class="menu-column left">
             <div class="menu-item" data-angle="215" style="order:1" onclick="loadContent('mpi')"><div class="circle-icon bg-mpi">🪐</div><div class="menu-text">Modul (MPI)</div></div>
-            <div class="menu-item" data-angle="180" style="order:2" onclick="loadContent('jadwal')"><div class="circle-icon bg-jadwal">🌙</div><div class="menu-text">Jadwal Pelajaran</div></div>
-            <div class="menu-item" data-angle="145" style="order:3" onclick="loadContent('info')"><div class="circle-icon bg-info">📡<span class="notif-dot" id="dot-info"></span></div><div class="menu-text">Pengumuman & Tugas</div></div>
+            <div class="menu-item" data-angle="180" style="order:2" onclick="loadContent('infokelas')"><div class="circle-icon bg-info">📡<span class="notif-dot" id="dot-info"></span></div><div class="menu-text">Info Kelas</div></div>
+            <div class="menu-item" data-angle="145" style="order:3" onclick="loadContent('game')"><div class="circle-icon bg-game">🎮</div><div class="menu-text">Game Belajar</div></div>
             <div class="menu-item" data-angle="325" style="order:4" onclick="loadContent('absen')"><div class="circle-icon bg-absen">🧑‍🚀<span class="notif-dot" id="dot-absen"></span><span class="lock-badge">🔒</span></div><div class="menu-text">Absensi & Diferensiasi</div></div>
         </div>
         <button class="avatar-hub" onclick="loadContent('home')" aria-label="Buka dashboard guru" title="Klik untuk membuka dashboard">
@@ -522,6 +542,55 @@
                     `;
                 }
             },
+            infokelas: {
+                url: "Modul Siswa / Info Kelas",
+                getHtml: async () => {
+                    const tab = window.infoTab || 'info';
+                    const inner = await appData[tab === 'jadwal' ? 'jadwal' : 'info'].getHtml();
+                    const btn = (k, label) => `<button class="btn-outline" style="${tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="pilihInfoTab('${k}')">${label}</button>`;
+                    return `<h2 class="view-title">Info Kelas</h2><div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">${btn('info', '📢 Pengumuman & Tugas')}${btn('jadwal', '🗓️ Jadwal Pelajaran')}</div>` + inner.replace(/<h2 class="view-title">[\s\S]*?<\/h2>/, '');
+                }
+            },
+            game: {
+                url: "Modul Siswa / Game Belajar",
+                getHtml: () => {
+                    const kartu = [
+                        ['⚡', 'Kuis Cepat', 'Jawab sebanyak mungkin sebelum waktu habis'],
+                        ['🃏', 'Pasangan Kartu', 'Cocokkan soal dengan jawabannya'],
+                        ['🧩', 'Susun Langkah', 'Urutkan langkah penyelesaian soal'],
+                        ['🔢', 'Teka-teki Hitung', 'Pecahkan teka-teki angka']
+                    ];
+                    return `
+                        <h2 class="view-title">Game Belajar Matematika</h2>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:14px;">Pilih permainan, kumpulkan bintang, dan asah kemampuan berhitungmu.</p>
+                        <div class="game-grid">
+                            ${kartu.map((k, i) => `<div class="game-card"><div class="ikon">${k[0]}</div><strong>${k[1]}</strong><p style="font-size:0.8rem; color:var(--text-muted);">${k[2]}</p><div class="bintang">☆☆☆</div><button class="btn-outline" onclick="bukaFokusGame()">${i === 0 ? '▶ Pratinjau Tata Letak' : 'Segera Hadir'}</button></div>`).join('')}
+                        </div>
+                    `;
+                }
+            },
+            gamefokus: {
+                url: "Game Belajar / Mode Fokus",
+                getHtml: () => `
+                    <div class="game-bar">
+                        <button class="btn-outline" onclick="keluarFokusGame()">✖ Keluar</button>
+                        <div class="game-progres"><div style="width:20%;"></div></div>
+                        <span>❤️❤️❤️</span><span>⭐ 0</span>
+                    </div>
+                    <p style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Soal 1 dari 5 • Pratinjau tata letak</p>
+                    <div class="game-soal">3x + 5 = 20, maka x = …</div>
+                    <div class="game-opsi">
+                        <button onclick="jawabPratinjau(this, false)">A. 3</button>
+                        <button onclick="jawabPratinjau(this, true)">B. 5</button>
+                        <button onclick="jawabPratinjau(this, false)">C. 7</button>
+                        <button onclick="jawabPratinjau(this, false)">D. 15</button>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:16px;">
+                        <button class="btn-outline" onclick="toggleSuara(this)">🔇 Suara mati</button>
+                        <button class="btn-outline">⏸ Jeda</button>
+                    </div>
+                `
+            },
             jadwal: {
                 url: "Modul Siswa / Jadwal Pelajaran",
                 getHtml: async () => {
@@ -624,7 +693,8 @@
         const urlArea = document.getElementById('browser-url');
 
         function closeDashboard() {
-            document.querySelector('.portal-wrapper').classList.remove('open');
+            document.querySelector('.portal-wrapper').classList.remove('open', 'fokus');
+            document.body.classList.remove('fokus-game');
         }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDashboard(); });
 
@@ -730,7 +800,7 @@
                 } else {
                     contentArea.innerHTML = out;
                 }
-                if (menu === 'info') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
+                if (menu === 'infokelas') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
             }
         }
 
@@ -804,6 +874,27 @@
             setTimeout(() => loadContent('home'), 1500);
         }
 
+        // === GAME: mode fokus & info kelas ===
+        function pilihInfoTab(t) { window.infoTab = t; renderContent('infokelas'); }
+        function bukaFokusGame() {
+            document.querySelector('.portal-wrapper').classList.add('fokus');
+            document.body.classList.add('fokus-game');
+            renderContent('gamefokus');
+        }
+        function keluarFokusGame() {
+            document.querySelector('.portal-wrapper').classList.remove('fokus');
+            document.body.classList.remove('fokus-game');
+            renderContent('game');
+        }
+        function jawabPratinjau(btn, benar) {
+            const semua = btn.parentElement.querySelectorAll('button');
+            semua.forEach(b => b.disabled = true);
+            btn.classList.add(benar ? 'benar' : 'salah');
+            btn.textContent = (benar ? '✔ ' : '✖ ') + btn.textContent;
+            showToast('Ini hanya pratinjau tata letak. Isi game dibuat pada tahap berikutnya.');
+        }
+        function toggleSuara(btn) { btn.textContent = btn.textContent.includes('mati') ? '🔊 Suara menyala' : '🔇 Suara mati'; }
+
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
         const orbitMQ = window.matchMedia('(min-width: 1100px)');
         const calmMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -833,7 +924,7 @@
                 const W = portalWrap.clientWidth;
                 const tRx = open ? Math.min(540, W / 2 - 70) : Math.min(300, W / 2 - 90);
                 const tRy = open ? Math.max(300, win.offsetHeight / 2 + 50) : 250;
-                const tH = 2 * (tRy + 25);
+                const tH = portalWrap.classList.contains('fokus') ? win.offsetHeight + 60 : 2 * (tRy + 25);
                 s.rx += (tRx - s.rx) * 0.07;
                 s.ry += (tRy - s.ry) * 0.07;
                 s.h += (tH - s.h) * 0.07;
