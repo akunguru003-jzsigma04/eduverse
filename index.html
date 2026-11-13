@@ -274,6 +274,8 @@
         .jd-blok { font-weight: 700; color: #1f2937; border-radius: 6px; }
         .jd-hari-ini th { background: var(--color-blue); color: #fff; }
         body:not(.guru-mode) #dot-absen, body:not(.guru-mode) #dot-jurnal, #dot-absen:not(.aktif), #dot-jurnal:not(.aktif) { display: none !important; }
+        .avatar-ring.berfoto { font-size: 0; }
+        .avatar-foto { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -395,7 +397,7 @@
                     return `
                         <h2 class="view-title">Selamat Datang${nama ? ', ' + esc(nama.split(',')[0]) : ''} 👋</h2>
                         <div class="profile-container">
-                            <div class="profile-avatar">👨‍🏫</div>
+                            <div class="profile-avatar"${window.fotoGuru ? ` style="background:url('${window.fotoGuru}') center/cover; font-size:0;"` : ''}>👨‍🏫</div>
                             <div><h3 style="color: var(--color-dark-blue); font-size: 1.2rem;">${esc(nama || 'Guru Matematika')}</h3><p style="color: var(--text-muted); font-size: 0.9rem;">${nama ? 'Guru Matematika' : 'Atur nama Anda di Kelola Kelas &amp; Siswa'}</p></div>
                         </div>
                         <div class="stats-grid">
@@ -590,7 +592,7 @@
                     const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
                     const selesai = m.tanggal_selesai && m.tanggal_selesai < hariIni;
                     const opsiMateri = d.materi.map(mm => `<option value="${mm.id}" ${mm.id === m.id ? 'selected' : ''}>${esc(mm.nama)}</option>`).join('');
-                    const kepala = tps.map((t, i) => `<th title="${esc(t.deskripsi)}">F${i + 1}</th>`).join('');
+                    const kepala = tps.map((t, i) => `<th title="${esc(t.deskripsi)}">TP${i + 1}</th>`).join('');
                     const baris = d.siswa.map((x, i) => {
                         const n = tampilNilai(d, m.id, x.id);
                         const sel = tps.map(t => { const v = d.f[x.id + '|' + t.id] || ''; return `<td><select class="nl-sel" onchange="simpanF('${x.id}','${t.id}',this.value)"><option value=""></option>${['IST', 'BAIK', 'PB'].map(o => `<option ${v === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>`; }).join('');
@@ -611,7 +613,7 @@
                         </div>
                         <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th>${kepala}<th>Skor Formatif</th><th>Sumatif</th><th>Hadir</th><th>Hari Efektif</th><th>% Hadir</th><th>Skor Akhir</th><th>Predikat</th></tr>${baris}</table></div>
                         <p style="font-size:0.75rem; color:var(--text-muted); margin:8px 0;">Formatif: IST=100, BAIK=90, PB=75 (rata-rata kolom terisi). Skor Akhir = 40% formatif + 40% sumatif + 20% kehadiran. Kehadiran = Hadir + Terlambat dibagi hari absensi tercatat pada periode materi.</p>
-                        ${tps.length ? `<div style="font-size:0.8rem; margin-bottom:10px;">${tps.map((t, i) => `<div><b>F${i + 1}</b> · ${esc(t.deskripsi)}</div>`).join('')}</div>` : ''}
+                        ${tps.length ? `<div style="font-size:0.8rem; margin-bottom:10px;">${tps.map((t, i) => `<div><b>TP${i + 1}</b> · ${esc(t.deskripsi)}</div>`).join('')}</div>` : ''}
                         <div style="padding:12px; border:1px solid var(--browser-border); border-radius:8px; background:var(--card-bg);">
                             <strong style="font-size:0.9rem;">📄 Laporan &amp; Ekspor</strong>
                             <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;"><input value="${esc(d.kelas.wali_kelas || '')}" placeholder="Nama wali kelas" onchange="simpanWali(this.value)" style="flex:1; min-width:160px;"></div>
@@ -675,6 +677,7 @@
                         <div style="${box}"><h3 style="${h3}">👤 Profil Guru</h3>
                             <div style="display:flex; gap:8px; flex-wrap:wrap;"><input id="kl-nama" value="${esc(g.data?.nama || '')}" placeholder="Nama lengkap beserta gelar" style="flex:1; min-width:200px;"><button class="btn-outline" onclick="simpanNama()">Simpan</button></div>
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">Mata pelajaran: Matematika</p>
+                            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px;"><div class="profile-avatar" style="${window.fotoGuru ? `background:url('${window.fotoGuru}') center/cover; font-size:0;` : ''}">👨‍🏫</div><div><input type="file" accept="image/*" onchange="unggahFoto(this)" style="max-width:230px;">${window.fotoGuru ? '<button class="btn-outline" style="margin-top:6px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusFoto()">Hapus Foto</button>' : ''}<p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Foto dipotong persegi dan dikecilkan otomatis. Tampil di ikon avatar dan dashboard.</p></div></div>
                         </div>
                         <div style="${box}"><h3 style="${h3}">🏫 Kelas</h3>
                             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;"><input id="kl-kelas" placeholder="Nama kelas, mis. X-1" style="flex:2; min-width:140px;"><input id="kl-tahun" value="2026/2027" style="flex:1; min-width:100px;"><button class="btn-outline" onclick="tambahKelas()">+ Tambah</button></div>
@@ -766,7 +769,7 @@
                         }
                         return `<tr class="${h === dow ? 'jd-hari-ini' : ''}"><th>${hn}</th>${sel}</tr>`;
                     }).join('');
-                    return judul + kontrol + `<div style="overflow-x:auto;"><table class="jd-tabel">${kepala}${baris}</table></div><p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">1 slot = 30 menit. KO = kokurikuler. Baris hari ini ditandai.</p>`;
+                    return judul + kontrol + `<div style="overflow-x:auto;"><table class="jd-tabel">${kepala}${baris}</table></div><p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">1 slot = 30 menit. KO = kokurikuler. Baris hari ini ditandai.</p><button class="btn-outline" style="margin-top:8px;" onclick="unduhJadwalPDF()">🖨️ Cetak / PDF (gaya EDUVERSE)</button>`;
                 }
             },
             info: {
@@ -787,18 +790,18 @@
                     if (sb) {
                         const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
                         const [pg, tg] = await Promise.all([
-                            sb.from('pengumuman').select('judul, isi, tag').eq('aktif', true).order('dibuat_pada', { ascending: false }).limit(20),
+                            (guruAuth ? sb.from('pengumuman').select('id, judul, isi, tag, aktif, dibuat_pada') : sb.from('pengumuman').select('id, judul, isi, tag, aktif, dibuat_pada').eq('aktif', true)).order('dibuat_pada', { ascending: false }).limit(20),
                             sb.from('tugas').select('mapel, judul, tenggat').gte('tenggat', hariIni).order('tenggat').limit(30)
                         ]);
                         if (pg.error || tg.error) return '<h2 class="view-title">Pengumuman & Tugas</h2><p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
-                        const warnaTag = { Penting: 'background:#fee2e2; color:#b91c1c;', P5: 'background:#dcfce7; color:#166534;' };
-                        pengumuman = pg.data.map(p => ({ judul: p.judul, isi: p.isi || '', tag: p.tag, warna: warnaTag[p.tag] || 'background:#dbeafe; color:#1e40af;' }));
+                        const warnaTag = { Penting: 'background:#fee2e2; color:#b91c1c;', P5: 'background:#dcfce7; color:#166534;', Kokurikuler: 'background:#dcfce7; color:#166534;' };
+                        pengumuman = pg.data.map(p => ({ id: p.id, aktif: p.aktif, tgl: new Date(p.dibuat_pada).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }), judul: p.judul, isi: p.isi || '', tag: p.tag, warna: warnaTag[p.tag] || 'background:#dbeafe; color:#1e40af;' }));
                         tugas = tg.data.map(t => ({ mapel: t.mapel, judul: t.judul, n: Math.round((new Date(t.tenggat + 'T00:00:00') - new Date(new Date().toDateString())) / 86400000) }));
                     }
                     return `
                         <h2 class="view-title">Pengumuman & Tugas</h2>
                         <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin-bottom:10px;">\ud83d\udce2 Pengumuman</h3>
-                        ${pengumuman.map(p => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${esc(p.judul)}</strong><span class="badge" style="${p.warna} margin-top:0;">${esc(p.tag)}</span></div><p style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${esc(p.isi)}</p></div>`).join('')}
+                        ${guruAuth && sb ? `<div style="${card}"><strong style="font-size:0.9rem;">➕ Tulis Pengumuman</strong><input id="pg-judul" placeholder="Judul pengumuman" style="margin:8px 0;"><textarea id="pg-isi" rows="3" placeholder="Isi pengumuman"></textarea><div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;"><select id="pg-tag" style="flex:1; min-width:120px;"><option>Info</option><option>Penting</option><option>Kokurikuler</option></select><button class="btn-submit" style="flex:1; min-width:120px;" onclick="kirimPengumuman()">Kirim</button></div></div>` : ''}${pengumuman.map(p => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${esc(p.judul)}</strong><span class="badge" style="${p.warna} margin-top:0;">${esc(p.tag)}</span></div><p style="font-size:0.85rem; color:var(--text-muted); margin-top:6px;">${esc(p.isi)}</p>${p.id ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:0.75rem; color:var(--text-muted);"><span>${p.tgl}${p.aktif === false ? ' · <b style="color:#b45309;">disembunyikan</b>' : ''}</span>${guruAuth ? `<button class="btn-outline" style="padding:0 8px;" onclick="togglePengumuman('${p.id}', ${p.aktif !== false})">${p.aktif === false ? '👁️ Tampilkan' : '🙈 Sembunyikan'}</button><button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusPengumuman('${p.id}')">🗑️</button>` : ''}</div>` : ''}</div>`).join('')}
                         <h3 style="color:var(--color-dark-blue); font-size:1.05rem; margin:20px 0 10px;">\ud83d\udcdd Tugas</h3>
                         ${tugas.map(t => `<div style="${card}"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><strong>${esc(t.judul)}</strong>${t.n <= 2 ? '<span class="badge" style="background:#fee2e2; color:#b91c1c; margin-top:0;">\u23f0 Segera</span>' : ''}</div><p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">${esc(t.mapel)} \u2022 Tenggat: ${fmt(t.n)}</p></div>`).join('')}
                     `;
@@ -1315,7 +1318,7 @@
             const L = dataLaporan(), k = L.d.kelas, guru = window.guruNama || 'Guru Matematika';
             const css = 'body{font-family:Arial,sans-serif;max-width:820px;margin:20px auto;padding:0 16px;color:#111}h1{font-size:18px;text-align:center;margin:0}h2{font-size:14px;text-align:center;margin:2px 0 14px;font-weight:normal}table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}th,td{border:1px solid #444;padding:4px 6px;text-align:center}td.l{text-align:left}th{background:#e5e7eb}.ttd{display:flex;justify-content:space-between;margin-top:40px;font-size:13px}.noprint{margin-bottom:12px}@media print{.noprint{display:none}}';
             const baris = L.rows.map(r => `<tr><td>${r.no}</td><td class="l">${esc(r.nama)}</td><td>${fn1(r.skorF)}</td><td>${fn1(r.sum)}</td><td>${fpct(r.persen)}</td><td>${fn1(r.akhir)}</td><td>${r.pred || '-'}</td></tr>`).join('');
-            const tps = (L.d.tp[L.m.id] || []).map((t, i) => `<li>F${i + 1}: ${esc(t.deskripsi)}</li>`).join('');
+            const tps = (L.d.tp[L.m.id] || []).map((t, i) => `<li>TP${i + 1}: ${esc(t.deskripsi)}</li>`).join('');
             const per = L.perhatian.length ? '<ul>' + L.perhatian.map(r => `<li>${esc(r.nama)} — ${r.pred || 'belum ada predikat'}, kehadiran ${fpct(r.persen)}</li>`).join('') + '</ul>' : '<p>Tidak ada.</p>';
             const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan ${esc(L.m.nama)} - ${esc(k.nama)}</title><style>${css}</style></head><body>
                 <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>
@@ -1361,22 +1364,32 @@
             if (!kr.data.length) return '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
             if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
             st.semester = st.semester || semesterSaatIni();
-            const mt = await sb.from('materi').select('id, nama, tanggal_mulai, tanggal_selesai').eq('kelas_id', st.kelasId).eq('semester', st.semester).order('urutan').order('nama');
-            if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_patch_4.sql di Supabase.</p>';
+            const mt = await sb.from('materi').select('id, nama, elemen, semester, tanggal_mulai, tanggal_selesai').eq('kelas_id', st.kelasId).order('urutan').order('nama');
+            if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_patch_4.sql dan supabase_patch_9.sql di Supabase.</p>';
+            const mtSemua = mt.data;
+            mt.data = mtSemua.filter(m => m.semester === st.semester);
             const mids = mt.data.map(m => m.id);
             const tp = mids.length ? await sb.from('tp').select('id, materi_id, deskripsi').in('materi_id', mids).order('urutan') : { data: [] };
             const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:12px; background:var(--card-bg);';
+            const kelasNama = (kr.data.find(k => k.id === st.kelasId) || {}).nama || '';
+            window.mpiTingkat = tingkatDari(kelasNama);
+            const kat = SEBARAN[window.mpiTingkat];
+            const sorot = 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);';
+            const panel = (guruAuth && kat) ? `<div style="${box}"><strong style="font-size:0.9rem;">📚 Sebaran Materi — Fase ${kat.fase} (Kelas ${window.mpiTingkat})</strong>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin:4px 0 8px;">Mengacu pada Keputusan Kepala BSKAP 046/H/KR/2025 dan dapat disesuaikan dengan kondisi sekolah. Tombol berwarna biru menunjukkan semester menurut sebaran; pilih semester lain bila perlu.</p>
+                ${kat.materi.map((m, i) => { const ada = mtSemua.find(x => x.nama.trim().toLowerCase() === m.nama.toLowerCase()); return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid var(--browser-border);"><span style="font-size:0.85rem;"><b>${esc(m.nama)}</b><br><small style="color:var(--text-muted);">${esc(m.elemen)}</small></span>${ada ? `<span style="font-size:0.8rem; color:#16a34a;">✔ Sudah ada (Semester ${ada.semester})</span>` : `<span style="display:flex; gap:6px;"><button class="btn-outline" style="${m.sem === 'Ganjil' ? sorot : ''}" onclick="tambahDariSebaran(${i}, 'Ganjil')">+ Ganjil</button><button class="btn-outline" style="${m.sem === 'Genap' ? sorot : ''}" onclick="tambahDariSebaran(${i}, 'Genap')">+ Genap</button></span>`}</div>`; }).join('')}
+                <button class="btn-outline" style="margin-top:10px;" onclick="tambahSemuaSebaran()">➕ Tambahkan semua sesuai sebaran</button></div>` : '';
             const kartu = mt.data.map((m, i) => {
                 const daftar = tp.data.filter(t => t.materi_id === m.id);
                 return `<div class="mt-card" style="${box}">
-                    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;"><strong>${i + 1}. ${esc(m.nama)}</strong><span style="font-size:0.8rem; color:var(--text-muted);">${fTgl(m.tanggal_mulai)} – ${fTgl(m.tanggal_selesai)}</span></div>
-                    ${daftar.map((t, j) => `<div style="display:flex; justify-content:space-between; gap:8px; padding:4px 0; font-size:0.85rem;"><span><b>F${j + 1}</b> · ${esc(t.deskripsi)}</span>${guruAuth ? `<button class="btn-outline" style="padding:0 8px;" onclick="hapusTP('${t.id}')">✖</button>` : ''}</div>`).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Belum ada TP.</p>'}
-                    ${guruAuth ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><input id="tp-${m.id}" placeholder="Tambah TP (satu TP = satu nilai formatif)" style="flex:1; min-width:160px;"><button class="btn-outline" onclick="tambahTP('${m.id}')">+ TP</button></div>
-                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center;"><label style="font-size:0.75rem;">Mulai</label><input type="date" value="${m.tanggal_mulai || ''}" onchange="ubahMateri('${m.id}','tanggal_mulai',this.value)"><label style="font-size:0.75rem;">Selesai</label><input type="date" value="${m.tanggal_selesai || ''}" onchange="ubahMateri('${m.id}','tanggal_selesai',this.value)"><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusMateri('${m.id}')">🗑️ Hapus Materi</button></div>` : ''}
+                    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;"><span><strong>${i + 1}. ${esc(m.nama)}</strong>${m.elemen ? `<br><small style="color:var(--text-muted);">${esc(m.elemen)}</small>` : ''}</span><span style="font-size:0.8rem; color:var(--text-muted);">${fTgl(m.tanggal_mulai)} – ${fTgl(m.tanggal_selesai)}</span></div>
+                    ${daftar.map((t, j) => `<div style="display:flex; justify-content:space-between; gap:8px; padding:4px 0; font-size:0.85rem;"><span><b>TP${j + 1}</b> · ${esc(t.deskripsi)}</span>${guruAuth ? `<span style="white-space:nowrap;"><button class="btn-outline" style="padding:0 8px;" data-t="${esc(t.deskripsi)}" onclick="ubahTP('${t.id}', this.dataset.t)">✏️</button> <button class="btn-outline" style="padding:0 8px;" onclick="hapusTP('${t.id}')">✖</button></span>` : ''}</div>`).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Belum ada TP.</p>'}
+                    ${guruAuth ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><textarea id="tp-${m.id}" rows="2" placeholder="Tambah TP: satu baris = satu TP (boleh banyak sekaligus). Satu TP = satu kolom nilai formatif." style="flex:1; min-width:160px;"></textarea><button class="btn-outline" onclick="tambahTP('${m.id}')">+ TP</button></div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center;"><select onchange="ubahMateri('${m.id}','semester',this.value)" style="width:auto;">${semesterOpsi(m.semester)}</select><button class="btn-outline" data-n="${esc(m.nama)}" onclick="ubahNamaMateri('${m.id}', this.dataset.n)">✏️ Nama</button><label style="font-size:0.75rem;">Mulai</label><input type="date" value="${m.tanggal_mulai || ''}" onchange="ubahMateri('${m.id}','tanggal_mulai',this.value)"><label style="font-size:0.75rem;">Selesai</label><input type="date" value="${m.tanggal_selesai || ''}" onchange="ubahMateri('${m.id}','tanggal_selesai',this.value)"><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusMateri('${m.id}')">🗑️ Hapus Materi</button></div>` : ''}
                 </div>`;
             }).join('') || '<p style="color:var(--text-muted);">Belum ada materi.</p>';
             const form = guruAuth ? `<div style="${box}"><strong style="font-size:0.9rem;">+ Tambah Materi</strong><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><input id="mt-nama" placeholder="Nama materi, mis. Eksponen" style="flex:2; min-width:160px;"><input id="mt-mulai" type="date" style="flex:1;"><input id="mt-selesai" type="date" style="flex:1;"><button class="btn-outline" onclick="tambahMateri()">Tambah</button></div></div>` : '';
-            return `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="mpiKelas(this.value)" style="flex:2; min-width:120px;">${kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select><select onchange="mpiSemester(this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select></div>${kartu}${form}`;
+            return `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="mpiKelas(this.value)" style="flex:2; min-width:120px;">${kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select><select onchange="mpiSemester(this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select></div>${panel}${kartu}${form}`;
         }
         async function tambahMateri() {
             const nama = document.getElementById('mt-nama').value.trim();
@@ -1385,16 +1398,16 @@
             if (mulai && selesai && selesai < mulai) { showToast('Tanggal selesai harus setelah tanggal mulai.', true); return; }
             await mpiAksi(sb.from('materi').insert({ kelas_id: window.mpiState.kelasId, nama, semester: window.mpiState.semester || semesterSaatIni(), urutan: document.querySelectorAll('.mt-card').length + 1, tanggal_mulai: mulai, tanggal_selesai: selesai }), 'Materi ditambahkan.');
         }
-        async function ubahMateri(id, kolom, val) { await mpiAksi(sb.from('materi').update({ [kolom]: val || null }).eq('id', id), 'Periode disimpan.'); }
+        async function ubahMateri(id, kolom, val) { await mpiAksi(sb.from('materi').update({ [kolom]: val || null }).eq('id', id), kolom === 'semester' ? 'Materi dipindah ke Semester ' + val + '.' : 'Periode disimpan.'); }
         async function hapusMateri(id) {
             if (!confirm('Hapus materi ini beserta seluruh TP dan nilainya?')) return;
             await mpiAksi(sb.from('materi').delete().eq('id', id), 'Materi dihapus.');
         }
         async function tambahTP(mid) {
-            const deskripsi = document.getElementById('tp-' + mid).value.trim();
-            if (!deskripsi) { showToast('Isi deskripsi TP dahulu.', true); return; }
+            const daftar = document.getElementById('tp-' + mid).value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+            if (!daftar.length) { showToast('Isi rumusan TP dahulu.', true); return; }
             const { count } = await sb.from('tp').select('id', { count: 'exact', head: true }).eq('materi_id', mid);
-            await mpiAksi(sb.from('tp').insert({ materi_id: mid, urutan: (count || 0) + 1, deskripsi }), 'TP ditambahkan.');
+            await mpiAksi(sb.from('tp').insert(daftar.map((deskripsi, i) => ({ materi_id: mid, urutan: (count || 0) + i + 1, deskripsi }))), daftar.length + ' TP ditambahkan.');
         }
         async function hapusTP(id) {
             if (!confirm('Hapus TP ini beserta nilai formatifnya?')) return;
@@ -1438,7 +1451,7 @@
                     grup(sumL, sumL, 'SUMATIF', 'FF7C3AED');
                     grup(L(6 + n), L(8 + n), 'KEHADIRAN', 'FFB45309');
                     grup(akhirL, predL, 'REKAP AKHIR', 'FF1E3A8A');
-                    const kep = ['No', 'NIS', 'Nama Peserta Didik', ...Array.from({ length: n }, (_, j) => 'F' + (j + 1)), 'Skor Formatif (Rata²)', '% Capaian Formatif', 'Nilai Sumatif (0–100)', 'Jml Hari Hadir', 'Total Hari Efektif', '% Kehadiran', 'Skor Akhir', 'PREDIKAT TKA'];
+                    const kep = ['No', 'NIS', 'Nama Peserta Didik', ...Array.from({ length: n }, (_, j) => 'TP' + (j + 1)), 'Skor Formatif (Rata²)', '% Capaian Formatif', 'Nilai Sumatif (0–100)', 'Jml Hari Hadir', 'Total Hari Efektif', '% Kehadiran', 'Skor Akhir', 'PREDIKAT TKA'];
                     kep.forEach((t, i) => { const c = ws.getCell(5, i + 1); c.value = t; kepala(c, 'FF334155'); });
                     ws.getRow(5).height = 42;
                     for (let i = 0; i < o.baris; i++) {
@@ -1464,7 +1477,7 @@
                     }
                     ws.addConditionalFormatting({ ref: `${predL}6:${predL}${5 + o.baris}`, rules: Object.entries(warnaPred).map(([p, [bg, fg]]) => ({ type: 'cellIs', operator: 'equal', formulae: [`"${p}"`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: bg } }, font: { color: { argb: fg }, bold: true } } })) });
                     ws.getColumn(1).width = 5; ws.getColumn(2).width = 12; ws.getColumn(3).width = 34;
-                    for (let c = 4; c <= 11 + n; c++) ws.getColumn(c).width = c < 4 + n ? 7 : 13;
+                    for (let c = 4; c <= 11 + n; c++) ws.getColumn(c).width = c < 4 + n ? 8 : 13;
                     ws.getColumn(11 + n).width = 14;
                     ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
                     const cat = 6 + o.baris; ws.mergeCells(`A${cat}:${lastL}${cat}`);
@@ -1522,18 +1535,18 @@
                 const jam = {}, nama = {}, rows = [];
                 JAM_DEMO.forEach((j, i) => { jam[i + 1] = { mulai: j[0], selesai: j[1] }; });
                 BLOK_DEMO.forEach(([hari, kls, a, b, k]) => { nama[kls] = kls; for (let j = a; j <= b; j++) rows.push({ id: kls + hari + j, kelas_id: kls, hari, jam_ke: j, jenis: k ? 'Kokurikuler' : 'Reguler' }); });
-                data = { rows, jam, nama };
+                data = { rows, jam, nama, tahun: '2026/2027' };
             } else {
                 const [jd, jm, kr] = await Promise.all([
                     sb.from('jadwal').select('id, kelas_id, hari, jam_ke, jenis').eq('semester', semester).order('hari').order('jam_ke'),
                     sb.from('jam_pelajaran').select('jam_ke, mulai, selesai').order('jam_ke'),
-                    sb.from('kelas').select('id, nama').order('nama')
+                    sb.from('kelas').select('id, nama, tahun_ajaran').order('nama')
                 ]);
                 if (jd.error || jm.error || kr.error) throw new Error('gagal memuat jadwal');
                 const jam = {}, nama = {};
                 jm.data.forEach(j => { jam[j.jam_ke] = { mulai: String(j.mulai).slice(0, 5), selesai: String(j.selesai).slice(0, 5) }; });
                 kr.data.forEach(k => { nama[k.id] = k.nama; });
-                data = { rows: jd.data, jam, nama };
+                data = { rows: jd.data, jam, nama, tahun: (kr.data.find(k => k.tahun_ajaran) || {}).tahun_ajaran || '' };
             }
             window.jadwalCache = { semester, t: Date.now(), data };
             return data;
@@ -1731,6 +1744,176 @@
             ubahAbsen('kelasId', id);
         }
 
+        // === EKSPOR JADWAL (gaya aSc, tampilan EDUVERSE), FOTO & PENGUMUMAN ===
+        function htmlJadwalPDF(data, filter, guru) {
+            const slots = Object.keys(data.jam).map(Number).sort((a, b) => a - b);
+            const urut = (a, b) => (data.nama[a] || '').localeCompare(data.nama[b] || '', 'id', { numeric: true });
+            const kelasUrut = Object.keys(data.nama).sort(urut);
+            const palet = ['#a5f3fc', '#bbf7d0', '#fde68a', '#fbcfe8', '#ddd6fe', '#fed7aa', '#bfdbfe', '#d9f99d'];
+            const warna = {}; kelasUrut.forEach((id, i) => { warna[id] = palet[i % palet.length]; });
+            const latar = (ids) => ids.length === 1 ? warna[ids[0]] : 'linear-gradient(135deg,' + ids.map((id, i) => `${warna[id]} ${Math.round(i * 100 / ids.length)}%,${warna[id]} ${Math.round((i + 1) * 100 / ids.length)}%`).join(',') + ')';
+            const bloks = susunBlok(data.rows, data.nama, filter);
+            const baris = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map((hn, i) => {
+                const bl = bloks[i + 1] || [];
+                let k = 0, sel = '';
+                while (k < slots.length) {
+                    const b = bl.find(x => x.dari === slots[k]);
+                    if (b) {
+                        const span = slots.filter(s => s >= b.dari && s <= b.sampai).length || 1;
+                        sel += `<td colspan="${span}"><div class="blok" style="background:${latar(b.ids)};"><span class="mm">MM${b.jenis === 'Kokurikuler' ? ' KO' : ''}</span><span class="${b.ids.length > 1 ? 'kecil' : 'besar'}">${b.ids.map(id => esc(data.nama[id])).join('<br>')}</span></div></td>`;
+                        k += span;
+                    } else { sel += '<td></td>'; k++; }
+                }
+                return `<tr><th class="hari">${hn}</th>${sel}</tr>`;
+            }).join('');
+            const css = '@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:12px;color:#1e1b4b}.noprint{margin-bottom:10px}.kop{display:flex;align-items:center;gap:14px;padding:12px 18px;border-radius:14px;background:linear-gradient(120deg,#1e3a8a,#6d28d9 62%,#f59e0b);color:#fff}.kop svg{width:54px;height:54px}.kop h1{margin:0;font-size:26px;letter-spacing:6px}.kop p{margin:2px 0 0;font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.9}.kop .kanan{margin-left:auto;text-align:right}.kop .kanan b{font-size:15px}.judul{text-align:center;margin:12px 0 8px}.judul b{font-size:17px}.judul div{font-size:13px;color:#4338ca}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1.5px solid #312e81;text-align:center;vertical-align:middle;padding:0}th.hari{width:78px;font-size:15px;background:#eef2ff}th.jam{font-size:15px;padding:4px 1px;background:#eef2ff}th.jam small{display:block;font-size:8px;font-weight:400;color:#4338ca}td{height:66px}.blok{position:relative;height:66px;display:flex;align-items:center;justify-content:center}.mm{position:absolute;left:5px;top:3px;font-size:8px;font-weight:600}.besar{font-size:19px;font-weight:700}.kecil{font-size:11px;font-weight:700;line-height:1.15}.legend{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;font-size:11px}.legend span{padding:3px 10px;border-radius:10px;border:1px solid #312e81}.foot{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#4338ca}@media print{.noprint{display:none}}';
+            const logo = '<svg viewBox="0 0 64 64"><defs><radialGradient id="lgp" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#93c5fd"/><stop offset="0.55" stop-color="#6366f1"/><stop offset="1" stop-color="#5b21b6"/></radialGradient></defs><g transform="rotate(-20 32 32)"><path d="M4 32A28 9 0 0 1 60 32" fill="none" stroke="#f9a826" stroke-width="3.5" stroke-linecap="round"/><circle cx="32" cy="32" r="15" fill="url(#lgp)"/><path d="M4 32A28 9 0 0 0 60 32" fill="none" stroke="#f9a826" stroke-width="3.5" stroke-linecap="round"/></g></svg>';
+            const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            const sub = filter ? 'Kelas ' + esc(data.nama[filter]) : 'Semua Kelas';
+            const legend = (filter ? [filter] : kelasUrut).map(id => `<span style="background:${warna[id]};">${esc(data.nama[id])}</span>`).join('');
+            return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Jadwal Mengajar ${esc(guru)}</title><style>${css}</style></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button> <small>Pilih orientasi Lanskap dan aktifkan "Grafik latar belakang" bila warna tidak muncul.</small></div>
+                <div class="kop">${logo}<div><h1>EDUVERSE</h1><p>Ekosistem Belajar Terpadu</p></div><div class="kanan"><b>${esc(NAMA_SEKOLAH)}</b><p>Jadwal Mengajar</p></div></div>
+                <div class="judul"><b>${esc(guru)}</b><div>${sub} • Semester ${esc(data.semester || '')} ${esc(data.tahun || '')} • 1 jam pelajaran = 30 menit</div></div>
+                <table><tr><th class="hari"></th>${slots.map(j => `<th class="jam">${j}<small>${data.jam[j].mulai} - ${data.jam[j].selesai}</small></th>`).join('')}</tr>${baris}</table>
+                <div class="legend">${legend}<span style="background:#fff;">MM = Matematika • KO = Kokurikuler</span></div>
+                <div class="foot"><span>Dihasilkan oleh EDUVERSE • ${tgl}</span><span>${esc(NAMA_SEKOLAH)}</span></div></body></html>`;
+        }
+        async function unduhJadwalPDF() {
+            const st = window.jadwalState || {}, semester = st.semester || semesterSaatIni();
+            let data;
+            try { data = await ambilJadwalData(semester); } catch (e) { showToast('Gagal memuat jadwal.', true); return; }
+            if (!data.rows.length || !Object.keys(data.jam).length) { showToast('Jadwal belum diisi.', true); return; }
+            const w = window.open('', '_blank');
+            if (!w) { showToast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini.', true); return; }
+            w.document.write(htmlJadwalPDF({ ...data, semester }, st.kelasId || '', window.guruNama || 'Guru Matematika'));
+            w.document.close();
+        }
+
+        // --- foto profil ---
+        function pasangFoto(url) {
+            window.fotoGuru = url;
+            const ring = document.querySelector('.avatar-ring');
+            if (!ring) return;
+            let im = ring.querySelector('.avatar-foto');
+            if (!im) { im = document.createElement('img'); im.className = 'avatar-foto'; im.alt = ''; ring.appendChild(im); }
+            im.src = url; ring.classList.add('berfoto');
+        }
+        function lepasFoto() {
+            window.fotoGuru = null;
+            const ring = document.querySelector('.avatar-ring');
+            if (!ring) return;
+            const im = ring.querySelector('.avatar-foto');
+            if (im) im.remove();
+            ring.classList.remove('berfoto');
+        }
+        function muatFoto() {
+            if (!sb) return;
+            const url = SUPABASE_URL + '/storage/v1/object/public/foto/guru.jpg?t=' + Math.floor(Date.now() / 60000);
+            const img = new Image();
+            img.onload = () => pasangFoto(url);
+            img.src = url;
+        }
+        async function unggahFoto(input) {
+            const f = input.files[0];
+            if (!f) return;
+            if (!sb) { showToast('Unggah foto membutuhkan koneksi Supabase.', true); return; }
+            try {
+                const img = await new Promise((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => gagal(new Error('Berkas bukan gambar')); i.src = URL.createObjectURL(f); });
+                const sisi = Math.min(img.width, img.height), c = document.createElement('canvas');
+                c.width = c.height = 320;
+                c.getContext('2d').drawImage(img, (img.width - sisi) / 2, (img.height - sisi) / 2, sisi, sisi, 0, 0, 320, 320);
+                URL.revokeObjectURL(img.src);
+                const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
+                const { error } = await sb.storage.from('foto').upload('guru.jpg', blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '60' });
+                if (error) { showToast('Gagal mengunggah: ' + error.message + ' (jalankan supabase_patch_8.sql)', true); return; }
+                pasangFoto(SUPABASE_URL + '/storage/v1/object/public/foto/guru.jpg?t=' + Date.now());
+                showToast('Foto disimpan.');
+                renderContent('kelola');
+            } catch (e) { showToast('Gagal: ' + e.message, true); }
+        }
+        async function hapusFoto() {
+            const { error } = await sb.storage.from('foto').remove(['guru.jpg']);
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            lepasFoto();
+            showToast('Foto dihapus.');
+            renderContent('kelola');
+        }
+
+        // --- pengumuman ---
+        async function kirimPengumuman() {
+            const judul = document.getElementById('pg-judul').value.trim(), isi = document.getElementById('pg-isi').value.trim(), tag = document.getElementById('pg-tag').value;
+            if (!judul) { showToast('Isi judul pengumuman dahulu.', true); return; }
+            const { error } = await sb.from('pengumuman').insert({ judul, isi: isi || null, tag });
+            if (error) { showToast('Gagal mengirim: ' + error.message, true); return; }
+            showToast('Pengumuman terkirim.');
+            renderContent('infokelas');
+        }
+        async function togglePengumuman(id, aktif) {
+            const { error } = await sb.from('pengumuman').update({ aktif: !aktif }).eq('id', id);
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            renderContent('infokelas');
+        }
+        async function hapusPengumuman(id) {
+            if (!confirm('Hapus pengumuman ini?')) return;
+            const { error } = await sb.from('pengumuman').delete().eq('id', id);
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            showToast('Pengumuman dihapus.');
+            renderContent('infokelas');
+        }
+
+        // === SEBARAN MATERI MATEMATIKA SMA (BSKAP 046/H/KR/2025) ===
+        const SEBARAN = {
+            X: { fase: 'E', materi: [
+                { elemen: 'Bilangan', nama: 'Eksponen', sem: 'Ganjil' },
+                { elemen: 'Aljabar dan Fungsi', nama: 'Persamaan dan Fungsi Eksponensial', sem: 'Ganjil' },
+                { elemen: 'Aljabar dan Fungsi', nama: 'Sistem Pertidaksamaan Linear Dua Variabel (SPtLDV)', sem: 'Ganjil' },
+                { elemen: 'Aljabar dan Fungsi', nama: 'Persamaan dan Fungsi Kuadrat', sem: 'Genap' },
+                { elemen: 'Geometri', nama: 'Perbandingan Trigonometri', sem: 'Genap' },
+                { elemen: 'Analisis Data dan Peluang', nama: 'Statistika', sem: 'Genap' }
+            ] },
+            XI: { fase: 'F', materi: [
+                { elemen: 'Bilangan', nama: 'Barisan dan Deret', sem: 'Ganjil' },
+                { elemen: 'Bilangan', nama: 'Matematika Keuangan', sem: 'Ganjil' },
+                { elemen: 'Aljabar dan Fungsi', nama: 'Fungsi Komposisi dan Fungsi Invers', sem: 'Genap' },
+                { elemen: 'Aljabar dan Fungsi', nama: 'Transformasi Fungsi', sem: 'Genap' }
+            ] },
+            XII: { fase: 'F', materi: [
+                { elemen: 'Geometri', nama: 'Lingkaran', sem: 'Ganjil' },
+                { elemen: 'Analisis Data dan Peluang', nama: 'Statistika Regresi', sem: 'Ganjil' },
+                { elemen: 'Analisis Data dan Peluang', nama: 'Permutasi dan Kombinasi', sem: 'Genap' },
+                { elemen: 'Analisis Data dan Peluang', nama: 'Peluang Kejadian Majemuk', sem: 'Genap' }
+            ] }
+        };
+        const tingkatDari = (nama) => { const m = String(nama || '').trim().toUpperCase().match(/^(XII|XI|X)(?![IVX])/); return m ? m[1] : null; };
+        async function tambahDariSebaran(i, sem) {
+            const kat = SEBARAN[window.mpiTingkat], m = kat && kat.materi[i];
+            if (!m) return;
+            await mpiAksi(sb.from('materi').insert({ kelas_id: window.mpiState.kelasId, nama: m.nama, elemen: m.elemen, semester: sem, urutan: i + 1 }), 'Materi ditambahkan ke Semester ' + sem + '.');
+        }
+        async function tambahSemuaSebaran() {
+            const kat = SEBARAN[window.mpiTingkat], kid = window.mpiState.kelasId;
+            if (!kat) return;
+            const { data, error } = await sb.from('materi').select('nama').eq('kelas_id', kid);
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            const ada = new Set(data.map(x => x.nama.trim().toLowerCase()));
+            const baru = kat.materi.map((m, i) => ({ m, i })).filter(({ m }) => !ada.has(m.nama.toLowerCase())).map(({ m, i }) => ({ kelas_id: kid, nama: m.nama, elemen: m.elemen, semester: m.sem, urutan: i + 1 }));
+            if (!baru.length) { showToast('Semua materi sebaran sudah ada.'); return; }
+            await mpiAksi(sb.from('materi').insert(baru), baru.length + ' materi ditambahkan sesuai sebaran.');
+        }
+        async function ubahTP(id, lama) {
+            const baru = prompt('Ubah rumusan TP:', lama || '');
+            if (baru === null) return;
+            if (!baru.trim()) { showToast('Rumusan TP tidak boleh kosong.', true); return; }
+            await mpiAksi(sb.from('tp').update({ deskripsi: baru.trim() }).eq('id', id), 'TP diperbarui.');
+        }
+        async function ubahNamaMateri(id, lama) {
+            const baru = prompt('Ubah nama materi:', lama || '');
+            if (baru === null) return;
+            if (!baru.trim()) { showToast('Nama materi tidak boleh kosong.', true); return; }
+            await mpiAksi(sb.from('materi').update({ nama: baru.trim() }).eq('id', id), 'Nama materi diperbarui.');
+        }
+
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
         const orbitMQ = window.matchMedia('(min-width: 1100px)');
         const calmMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1795,7 +1978,7 @@
 
         window.onload = () => {
             if(localStorage.getItem('theme') === 'dark') toggleTheme();
-            applyGuruMode(); // Dashboard tertutup saat awal; hanya avatar & menu yang terlihat
+            applyGuruMode(); muatFoto(); // Dashboard tertutup saat awal; hanya avatar & menu yang terlihat
         }
     </script>
 </body>
