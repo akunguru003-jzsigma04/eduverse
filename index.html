@@ -264,6 +264,16 @@
         .nl-tabel th, .nl-tabel td { white-space: nowrap; }
         .pr-chip { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--browser-border); }
         .pr-Istimewa { background: #dcfce7; color: #166534; } .pr-Baik { background: #dbeafe; color: #1e40af; } .pr-Cukup { background: #fef3c7; color: #92400e; } .pr-Kurang { background: #fee2e2; color: #991b1b; }
+        .jr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+        .jr-card { border: 1px solid var(--browser-border); border-radius: 10px; padding: 12px; background: var(--card-bg); cursor: pointer; }
+        .jr-card:hover { border-color: var(--color-blue); }
+        .jr-p { font-weight: 700; color: var(--color-dark-blue); }
+        .jr-a { margin-top: 8px; font-size: 0.78rem; color: var(--text-muted); }
+        .jd-tabel th, .jd-tabel td { min-width: 58px; text-align: center; font-size: 0.75rem; padding: 6px 4px; }
+        .jd-tabel th small { font-weight: 400; color: var(--text-muted); }
+        .jd-blok { font-weight: 700; color: #1f2937; border-radius: 6px; }
+        .jd-hari-ini th { background: var(--color-blue); color: #fff; }
+        body:not(.guru-mode) #dot-absen, body:not(.guru-mode) #dot-jurnal, #dot-absen:not(.aktif), #dot-jurnal:not(.aktif) { display: none !important; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -379,6 +389,8 @@
                         const [a, b, c] = await Promise.all([hitung('kelas'), hitung('siswa'), hitung('jadwal')]);
                         kls = a.count ?? '-'; sis = b.count ?? '-'; jam = c.count ?? '-';
                     }
+                    let hariIniHtml = '';
+                    try { hariIniHtml = (await htmlPengingat()) + (await htmlHariIni()); } catch (e) { /* kartu opsional */ }
                     const stat = (v, label, warna) => `<div class="stat-box"><h2 style="color:${warna};">${v}</h2><p style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">${label}</p></div>`;
                     return `
                         <h2 class="view-title">Selamat Datang${nama ? ', ' + esc(nama.split(',')[0]) : ''} 👋</h2>
@@ -391,6 +403,7 @@
                             ${stat(sis, 'Siswa', 'var(--color-blue)')}
                             ${stat(jam, 'Jam Mengajar', '#16a34a')}
                         </div>
+                        ${hariIniHtml}
                         <button class="btn-submit" style="margin-top:16px;" onclick="loadContent('kelola')">⚙️ Kelola Kelas &amp; Siswa</button>
                     `;
                 }
@@ -401,6 +414,7 @@
                     const judul = '<h2 class="view-title">Absensi</h2>';
                     if (!sb) return judul + '<p style="color:var(--text-muted);">Absensi membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
                     const st = (window.absenState = window.absenState || { tab: 'input' });
+                    if (!st.autoDone) { st.autoDone = true; const ks = await kelasSekarang(); if (ks) st.kelasId = ks; }
                     const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
                     st.tanggal = st.tanggal || hariIni;
                     st.bulan = st.bulan || hariIni.slice(0, 7);
@@ -412,6 +426,8 @@
                     if (sw.error) return judul + '<p style="color:#b91c1c;">Gagal memuat siswa.</p>';
                     const siswa = sw.data, ids = siswa.map(x => x.id);
                     st.jumlah = siswa.length;
+                    let gab = [];
+                    try { gab = await blokGabungan(st.kelasId, st.tanggal); } catch (e) { /* opsional */ }
                     const opsiKelas = kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
                     const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="ubahAbsen('tab','${k}')">${label}</button>`;
                     const atas = `${judul}<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${tabBtn('input', '📝 Input Harian')}${tabBtn('rekap', '📊 Rekap Bulanan')}</div>`;
@@ -446,6 +462,17 @@
 
                     const ab = await sb.from('absensi').select('siswa_id, status, catatan').eq('tanggal', st.tanggal).in('siswa_id', ids);
                     if (ab.error) return atas + '<p style="color:#b91c1c;">Gagal memuat absensi.</p>';
+                    let pert = '', materi = '', namaMateri = [];
+                    {
+                        const [ja, jb, jc] = await Promise.all([
+                            sb.from('jurnal').select('pertemuan, materi').eq('kelas_id', st.kelasId).eq('tanggal', st.tanggal).maybeSingle(),
+                            sb.from('jurnal').select('pertemuan').eq('kelas_id', st.kelasId).not('pertemuan', 'is', null).order('pertemuan', { ascending: false }).limit(1),
+                            sb.from('materi').select('nama').eq('kelas_id', st.kelasId).order('urutan')
+                        ]);
+                        if (ja.data) { pert = ja.data.pertemuan ?? ''; materi = ja.data.materi || ''; }
+                        if (pert === '') pert = ((jb.data && jb.data[0] && jb.data[0].pertemuan) || 0) + 1;
+                        namaMateri = (jc.data || []).map(x => x.nama);
+                    }
                     st.data = {}; st.tersimpan = new Set();
                     ab.data.forEach(r => { st.data[r.siswa_id] = { s: r.status, c: r.catatan || '' }; st.tersimpan.add(r.siswa_id); });
                     const baris = siswa.map((x, i) => {
@@ -461,6 +488,11 @@
                             <input type="date" value="${st.tanggal}" onchange="ubahAbsen('tanggal', this.value)" style="flex:1; min-width:140px;">
                             <select onchange="ubahAbsen('kelasId', this.value)" style="flex:1; min-width:140px;">${opsiKelas}</select>
                         </div>
+                        ${gab.length > 1 ? `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;"><span style="font-size:0.8rem; color:var(--text-muted);">Kelas gabungan:</span>${gab.map(g => `<button class="btn-outline" style="${g.id === st.kelasId ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="pindahKelasAbsen('${g.id}')">${esc(g.nama)}</button>`).join('')}</div>` : ''}
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                            <div style="width:110px;"><label style="font-size:0.75rem; color:var(--text-muted);">Pertemuan ke-</label><input type="number" min="1" id="ab-pert" value="${pert}"></div>
+                            <div style="flex:1; min-width:180px;"><label style="font-size:0.75rem; color:var(--text-muted);">Materi</label><input id="ab-materi" list="ab-materi-list" value="${esc(materi)}" placeholder="Materi pertemuan ini"><datalist id="ab-materi-list">${namaMateri.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+                        </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
                             <div id="abs-ringkas"></div>
                             <button class="btn-outline" onclick="semuaHadir()">✔ Semua Hadir</button>
@@ -473,33 +505,56 @@
             jurnal: {
                 url: "Modul Guru / Daily Journal",
                 getHtml: async () => {
+                    const st = (window.jurnalState = window.jurnalState || { tab: 'tulis' });
+                    if (!st.autoDone) { st.autoDone = true; const ks = await kelasSekarang(); if (ks) st.kelasId = ks; }
+                    st.tanggal = st.tanggal || localDate();
+                    const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="ubahJurnal('tab','${k}')">${label}</button>`;
+                    const atas = `<h2 class="view-title">Daily Journal</h2><div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">${tabBtn('tulis', '✍️ Tulis Jurnal')}${tabBtn('riwayat', '📚 Riwayat')}</div>`;
                     let opsiKelas = '<option value="">Matematika - X-1</option>';
                     if (sb) {
-                        const { data } = await sb.from('kelas').select('id, nama').order('nama');
-                        opsiKelas = (data && data.length) ? data.map(k => `<option value="${k.id}">Matematika - ${esc(k.nama)}</option>`).join('') : '<option value="">Belum ada kelas (tambah di Kelola Kelas)</option>';
+                        const kr = await sb.from('kelas').select('id, nama').order('nama');
+                        const kelas = kr.data || [];
+                        if (!kelas.some(k => k.id === st.kelasId)) st.kelasId = kelas.length ? kelas[0].id : null;
+                        opsiKelas = kelas.length ? kelas.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>Matematika - ${esc(k.nama)}</option>`).join('') : '<option value="">Belum ada kelas (tambah di Kelola Kelas)</option>';
                     }
-                    const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                    if (st.tab === 'riwayat') return atas + await htmlRiwayat(st, opsiKelas);
+                    let j = null, nextP = 1, peringatan = '';
+                    if (sb && st.kelasId) {
+                        const [a, b] = await Promise.all([
+                            sb.from('jurnal').select('pertemuan, materi, kegiatan, kokurikuler, refleksi').eq('kelas_id', st.kelasId).eq('tanggal', st.tanggal).maybeSingle(),
+                            sb.from('jurnal').select('pertemuan').eq('kelas_id', st.kelasId).not('pertemuan', 'is', null).order('pertemuan', { ascending: false }).limit(1)
+                        ]);
+                        if (a.error) peringatan = '<div style="padding:10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.85rem; margin-bottom:10px;">Jalankan supabase_patch_6.sql di Supabase agar nomor pertemuan dapat disimpan.</div>';
+                        j = a.data;
+                        nextP = ((b.data && b.data[0] && b.data[0].pertemuan) || 0) + 1;
+                    }
+                    let gab = [];
+                    if (sb && st.kelasId) { try { gab = await blokGabungan(st.kelasId, st.tanggal); } catch (e) { /* opsional */ } }
+                    const v = (k) => esc(j && j[k] != null ? j[k] : '');
+                    const pert = j && j.pertemuan != null ? j.pertemuan : nextP;
                     const kotak = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:14px; background:var(--card-bg);';
                     const h3 = 'color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;';
-                    return `
-                        <h2 class="view-title">Daily Journal</h2>
+                    return atas + peringatan + `
                         <div class="form-group" style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <div style="flex:1; min-width:140px;"><label>Tanggal</label><input type="date" id="jurnal-tanggal" value="${hariIni}"></div>
-                            <div style="flex:2; min-width:180px;"><label>Mata Pelajaran & Kelas</label><select id="jurnal-kelas">${opsiKelas}</select></div>
+                            <div style="flex:1; min-width:140px;"><label>Tanggal</label><input type="date" id="jurnal-tanggal" value="${st.tanggal}" onchange="ubahJurnal('tanggal', this.value)"></div>
+                            <div style="flex:2; min-width:170px;"><label>Mata Pelajaran & Kelas</label><select id="jurnal-kelas" onchange="ubahJurnal('kelasId', this.value)">${opsiKelas}</select></div>
+                            <div style="width:110px;"><label>Pertemuan ke-</label><input type="number" min="1" id="jurnal-pert" value="${pert}"></div>
                         </div>
+                        <p style="font-size:0.8rem; color:var(--text-muted); margin:-4px 0 10px;">${j ? '✔ Jurnal tanggal ini sudah ada, perubahan akan menimpanya. Pertemuan dan materi juga tampil di Absensi.' : 'Jurnal baru. Pertemuan dan materi akan tersinkron dengan Absensi.'}</p>
                         <div style="${kotak}">
                             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
                                 <h3 style="${h3} margin-bottom:0;">📘 Intrakurikuler</h3>
                                 <button class="btn-outline" onclick="syncRPP()">🔄 Ambil dari ATP/Modul</button>
                             </div>
-                            <div class="form-group"><label>Materi / Tujuan Pembelajaran</label><input type="text" id="jurnal-topik" placeholder="Otomatis terisi jika klik tombol Ambil dari ATP/Modul..."></div>
-                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Pembelajaran</label><textarea id="jurnal-kegiatan" rows="2"></textarea></div>
+                            <div class="form-group"><label>Materi</label><input type="text" id="jurnal-topik" value="${v('materi')}" placeholder="Materi pertemuan ini"></div>
+                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Pembelajaran</label><textarea id="jurnal-kegiatan" rows="2">${v('kegiatan')}</textarea></div>
                         </div>
                         <div style="${kotak}">
                             <h3 style="${h3}">🌱 Kokurikuler</h3>
-                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Kokurikuler (jika ada)</label><textarea id="jurnal-koku" rows="2"></textarea></div>
+                            <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Kokurikuler (jika ada)</label><textarea id="jurnal-koku" rows="2">${v('kokurikuler')}</textarea></div>
                         </div>
-                        <div class="form-group"><label>Catatan & Refleksi</label><textarea id="jurnal-catatan" rows="3" placeholder="Evaluasi, catatan diferensiasi, tindak lanjut..."></textarea></div>
+                        <div class="form-group"><label>Catatan & Refleksi</label><textarea id="jurnal-catatan" rows="3" placeholder="Evaluasi, catatan diferensiasi, tindak lanjut...">${v('refleksi')}</textarea></div>
+                        ${gab.length > 1 ? `<div style="${kotak}"><strong style="font-size:0.9rem;">👥 Kelas gabungan</strong><p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Jurnal ini juga disalin ke kelas berikut. Nomor pertemuan menyesuaikan masing-masing kelas.</p>${gab.filter(g => g.id !== st.kelasId).map(g => `<label style="display:inline-flex; align-items:center; gap:6px; margin-right:14px;"><input type="checkbox" class="jr-gab" value="${g.id}" checked style="width:auto;"> ${esc(g.nama)}</label>`).join('')}</div>` : ''}
                         <button class="btn-submit" onclick="simpanJurnal()">Simpan Jurnal</button>
                     `;
                 }
@@ -625,7 +680,7 @@
                             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;"><input id="kl-kelas" placeholder="Nama kelas, mis. X-1" style="flex:2; min-width:140px;"><input id="kl-tahun" value="2026/2027" style="flex:1; min-width:100px;"><button class="btn-outline" onclick="tambahKelas()">+ Tambah</button></div>
                             ${daftarKelas}
                         </div>
-                        <div style="${box}"><h3 style="${h3}">🎒 Siswa${kel ? ' — ' + esc(kel.nama) : ''}</h3>${bagianSiswa}</div>
+                        <div style="${box}"><h3 style="${h3}">🎒 Siswa${kel ? ' — ' + esc(kel.nama) : ''}</h3>${bagianSiswa}</div>${await htmlJadwalKelola(kelas)}
                     `;
                 }
             },
@@ -681,52 +736,37 @@
             jadwal: {
                 url: "Modul Siswa / Jadwal Pelajaran",
                 getHtml: async () => {
-                    const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'];
-                    const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                    const judul = '<h2 class="view-title">Jadwal Pelajaran</h2>';
+                    const st = (window.jadwalState = window.jadwalState || {});
+                    st.semester = st.semester || semesterSaatIni();
+                    let data;
+                    try { data = await ambilJadwalData(st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat jadwal. Jalankan supabase_patch_7.sql di Supabase.</p>'; }
+                    const kelasAda = Object.keys(data.nama).sort((a, b) => data.nama[a].localeCompare(data.nama[b], 'id', { numeric: true }));
+                    if (st.kelasId === undefined) st.kelasId = guruAuth ? '' : (kelasAda[0] || '');
+                    if (st.kelasId && !data.nama[st.kelasId]) st.kelasId = '';
+                    const kontrol = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahJadwal('kelasId', this.value)" style="flex:2; min-width:140px;"><option value="">Semua kelas</option>${kelasAda.map(id => `<option value="${esc(id)}" ${id === st.kelasId ? 'selected' : ''}>${esc(data.nama[id])}</option>`).join('')}</select><select onchange="ubahJadwal('semester', this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select></div>`;
+                    const slots = Object.keys(data.jam).map(Number).sort((a, b) => a - b);
+                    if (!data.rows.length || !slots.length) return judul + kontrol + '<p style="color:var(--text-muted);">Jadwal belum diisi. Guru mengatur jadwal di Kelola Kelas &amp; Siswa.</p>';
+                    const bloks = susunBlok(data.rows, data.nama, st.kelasId);
                     const dow = new Date().getDay();
-                    const sel = (dow >= 1 && dow <= 5) ? dow - 1 : -1;
-                    let mapel = [
-                        ['Fisika', 'Fisika', 'Matematika', 'Matematika', 'B. Indonesia', 'B. Indonesia', 'Kimia', 'Kimia'],
-                        ['Biologi', 'Biologi', 'B. Inggris', 'B. Inggris', 'Fisika', 'Fisika', 'Informatika', 'Informatika'],
-                        ['Matematika', 'Matematika', 'Kimia', 'Kimia', 'Sejarah', 'Sejarah', 'P5', 'P5'],
-                        ['B. Indonesia', 'B. Indonesia', 'Fisika', 'Fisika', 'PJOK', 'PJOK', 'Biologi', 'Biologi'],
-                        ['PAI', 'PAI', 'B. Inggris', 'B. Inggris', 'Matematika', 'Informatika', '-', '-']
-                    ];
-                    let kelasNama = 'X-MIPA 1';
-                    if (sb) {
-                        const { data, error } = await sb.from('jadwal').select('hari, jam_ke, mapel, kelas(nama)').order('hari').order('jam_ke');
-                        const judul = '<h2 class="view-title">Jadwal Pelajaran</h2>';
-                        if (error) return judul + '<p style="color:#b91c1c;">Gagal memuat jadwal. Periksa koneksi, lalu coba lagi.</p>';
-                        if (!data.length) return judul + '<p style="color:var(--text-muted);">Jadwal belum diisi oleh guru.</p>';
-                        const daftar = [...new Set(data.map(r => r.kelas.nama))].sort();
-                        if (!window.jadwalKelas || !daftar.includes(window.jadwalKelas)) window.jadwalKelas = daftar[0];
-                        kelasNama = window.jadwalKelas;
-                        mapel = hari.map(() => Array(8).fill('-'));
-                        data.filter(r => r.kelas.nama === kelasNama).forEach(r => {
-                            if (r.hari >= 1 && r.hari <= 5 && r.jam_ke >= 1 && r.jam_ke <= 8) mapel[r.hari - 1][r.jam_ke - 1] = r.mapel;
-                        });
-                    }
-                    const rows = [
-                        { j: '1', w: '07.00 - 07.45', i: 0 }, { j: '2', w: '07.45 - 08.30', i: 1 }, { j: '3', w: '08.30 - 09.15', i: 2 },
-                        { b: 'Istirahat 09.15 - 09.30' },
-                        { j: '4', w: '09.30 - 10.15', i: 3 }, { j: '5', w: '10.15 - 11.00', i: 4 }, { j: '6', w: '11.00 - 11.45', i: 5 },
-                        { b: 'Ishoma 11.45 - 12.15' },
-                        { j: '7', w: '12.15 - 13.00', i: 6 }, { j: '8', w: '13.00 - 13.45', i: 7 }
-                    ];
-                    const body = rows.map(r => r.b
-                        ? `<tr><td colspan="6" style="background:var(--card-bg); color:var(--text-muted); font-size:0.75rem; font-weight:600;">\u2615 ${r.b}</td></tr>`
-                        : `<tr><td><strong>${r.j}</strong><br><span style="font-size:0.7rem; color:var(--text-muted);">${r.w}</span></td>${mapel.map((d, k) => `<td class="${k === sel ? 'hari-ini' : ''}">${esc(d[r.i])}</td>`).join('')}</tr>`
-                    ).join('');
-                    return `
-                        <h2 class="view-title">Jadwal Pelajaran</h2>
-                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Kelas ${esc(kelasNama)} \u2022 Semester Ganjil 2026/2027 \u2022 Hari ini: <strong>${namaHari[dow]}</strong></p>
-                        <div style="overflow-x:auto;">
-                            <table class="jadwal">
-                                <tr><th style="width:90px;">Jam</th>${hari.map((h, k) => `<th class="${k === sel ? 'hari-ini' : ''}">${h}</th>`).join('')}</tr>
-                                ${body}
-                            </table>
-                        </div>
-                    `;
+                    const palet = ['#bbf7d0', '#bfdbfe', '#fbcfe8', '#fde68a', '#ddd6fe', '#fed7aa', '#a7f3d0', '#fecaca'];
+                    const warna = (s) => palet[Array.from(s).reduce((a, c) => a + c.charCodeAt(0), 0) % palet.length];
+                    const kepala = `<tr><th></th>${slots.map(j => `<th>${j}<br><small>${data.jam[j].mulai}–${data.jam[j].selesai}</small></th>`).join('')}</tr>`;
+                    const baris = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'].map((hn, i) => {
+                        const h = i + 1, bl = bloks[h] || [];
+                        let k = 0, sel = '';
+                        while (k < slots.length) {
+                            const b = bl.find(x => x.dari === slots[k]);
+                            if (b) {
+                                const span = slots.filter(s => s >= b.dari && s <= b.sampai).length || 1;
+                                const label = st.kelasId ? 'Matematika' : b.ids.map(x => data.nama[x]).join(' / ');
+                                sel += `<td colspan="${span}" class="jd-blok" style="background:${warna(label + b.jenis)};">${esc(label)}${b.jenis === 'Kokurikuler' ? '<br><small>KO</small>' : ''}</td>`;
+                                k += span;
+                            } else { sel += '<td></td>'; k++; }
+                        }
+                        return `<tr class="${h === dow ? 'jd-hari-ini' : ''}"><th>${hn}</th>${sel}</tr>`;
+                    }).join('');
+                    return judul + kontrol + `<div style="overflow-x:auto;"><table class="jd-tabel">${kepala}${baris}</table></div><p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">1 slot = 30 menit. KO = kokurikuler. Baris hari ini ditandai.</p>`;
                 }
             },
             info: {
@@ -844,6 +884,7 @@
                 guruAuth = true;
                 if (!sb) { try { sessionStorage.setItem('guruAuth', '1'); } catch (e) {} }
                 applyGuruMode();
+                perbaruiTitik();
                 const target = pendingMenu || 'home';
                 closePin();
                 showToast('Mode guru aktif. Selamat datang' + (window.guruNama ? ', ' + window.guruNama : '') + '!');
@@ -866,7 +907,7 @@
         }
         if (sb) {
             sb.auth.getSession().then(async ({ data }) => {
-                if (data.session && await cekGuru(data.session.user)) { guruAuth = true; applyGuruMode(); }
+                if (data.session && await cekGuru(data.session.user)) { guruAuth = true; applyGuruMode(); perbaruiTitik(); }
             });
         }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePin(); });
@@ -946,22 +987,89 @@
             if (await kelolaAksi(sb.from('siswa').delete().eq('id', id), 'Siswa dihapus.')) renderContent('kelola');
         }
 
-        // === DAILY JOURNAL ===
+        // === DAILY JOURNAL, RIWAYAT & SINKRON ABSENSI ===
+        const localDate = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        const fTglHari = (t) => new Date(t + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        function ubahJurnal(k, v) { window.jurnalState[k] = v; renderContent('jurnal'); }
+        function bukaJurnal(tgl) { window.jurnalState.tanggal = tgl; window.jurnalState.tab = 'tulis'; renderContent('jurnal'); }
         async function simpanJurnal() {
+            const st = window.jurnalState;
             const v = (id) => (document.getElementById(id)?.value || '').trim();
-            const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-            const isi = { tanggal: v('jurnal-tanggal') || hariIni, materi: v('jurnal-topik'), kegiatan: v('jurnal-kegiatan'), kokurikuler: v('jurnal-koku'), refleksi: v('jurnal-catatan') };
+            const isi = { pertemuan: parseInt(v('jurnal-pert'), 10) || null, materi: v('jurnal-topik') || null, kegiatan: v('jurnal-kegiatan') || null, kokurikuler: v('jurnal-koku') || null, refleksi: v('jurnal-catatan') || null };
             if (!isi.materi && !isi.kokurikuler) { showToast('Isi materi intrakurikuler atau kegiatan kokurikuler dahulu.', true); return; }
-            if (sb) {
-                const { error } = await sb.from('jurnal').insert({ ...isi, kelas_id: v('jurnal-kelas') || null, jenis: 'harian' });
-                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_2.sql bila kolom belum ada)', true); return; }
-                showToast('Jurnal tersimpan.');
-            } else {
-                showToast('Jurnal berhasil disinkronkan ke server!');
+            if (!sb) { showToast('Jurnal berhasil disinkronkan ke server!'); return; }
+            if (!st.kelasId) { showToast('Pilih kelas dahulu.', true); return; }
+            const target = [{ ...isi, kelas_id: st.kelasId, tanggal: st.tanggal, jenis: 'harian' }];
+            for (const cb of document.querySelectorAll('.jr-gab:checked')) {
+                target.push({ ...isi, pertemuan: await pertemuanUntuk(cb.value, st.tanggal), kelas_id: cb.value, tanggal: st.tanggal, jenis: 'harian' });
             }
-            const dot = document.getElementById('dot-jurnal');
-            if (dot) dot.style.display = 'none';
-            setTimeout(() => loadContent('home'), 1500);
+            const { error } = await sb.from('jurnal').upsert(target, { onConflict: 'kelas_id,tanggal' });
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_2 dan supabase_patch_6)', true); return; }
+            window.pengingatCache = null; perbaruiTitik();
+            showToast(target.length > 1 ? 'Jurnal tersimpan untuk ' + target.length + ' kelas.' : 'Jurnal tersimpan.');
+            renderContent('jurnal');
+        }
+        async function htmlRiwayat(st, opsiKelas) {
+            if (!sb) return '<p style="color:var(--text-muted);">Riwayat membutuhkan koneksi Supabase.</p>';
+            if (!st.kelasId) return '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
+            const jr = await sb.from('jurnal').select('tanggal, pertemuan, materi').eq('kelas_id', st.kelasId).order('pertemuan', { ascending: true, nullsFirst: false }).order('tanggal');
+            if (jr.error) return '<p style="color:#b91c1c;">Gagal memuat riwayat. Jalankan supabase_patch_6.sql di Supabase.</p>';
+            const sw = await sb.from('siswa').select('id').eq('kelas_id', st.kelasId);
+            const ids = (sw.data || []).map(x => x.id), tgls = jr.data.map(r => r.tanggal).sort();
+            const ringkas = {};
+            if (ids.length && tgls.length) {
+                try {
+                    const rows = await ambilSemua(() => sb.from('absensi').select('tanggal, status').in('siswa_id', ids).gte('tanggal', tgls[0]).lte('tanggal', tgls[tgls.length - 1]));
+                    rows.forEach(r => { const a = (ringkas[r.tanggal] = ringkas[r.tanggal] || {}); a[r.status] = (a[r.status] || 0) + 1; });
+                } catch (e) { /* ringkasan absensi opsional */ }
+            }
+            const ikon = [['Hadir', '✔'], ['Terlambat', '⏰'], ['Sakit', '🤒'], ['Izin', '📝'], ['Alpa', '❌']];
+            const kartu = jr.data.map(r => {
+                const a = ringkas[r.tanggal];
+                const sum = a ? ikon.filter(([n]) => a[n]).map(([n, i]) => `${i} ${a[n]}`).join('  ') : 'Absensi belum diisi';
+                return `<div class="jr-card" onclick="bukaJurnal('${r.tanggal}')"><div class="jr-p">Pertemuan : ${r.pertemuan ?? '-'}</div><div style="font-size:0.85rem;">${fTglHari(r.tanggal)}</div><div style="margin-top:6px; font-size:0.85rem;"><b>Materi :</b> ${esc(r.materi || '-')}</div><div class="jr-a">${sum}</div></div>`;
+            }).join('');
+            return `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;"><select onchange="ubahJurnal('kelasId', this.value)" style="flex:1; min-width:160px;">${opsiKelas}</select><button class="btn-outline" onclick="unduhJurnalExcel()">⬇️ Unduh Excel (semua kelas)</button></div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">${jr.data.length} pertemuan tercatat. Klik kartu untuk membuka atau mengubah jurnalnya.</p>
+                ${kartu ? `<div class="jr-grid">${kartu}</div>` : '<p style="color:var(--text-muted);">Belum ada jurnal untuk kelas ini.</p>'}`;
+        }
+        async function unduhJurnalExcel() {
+            showToast('Menyiapkan jurnal...');
+            try { if (!window.ExcelJS) await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'); }
+            catch (e) { showToast('Pustaka Excel gagal dimuat. Periksa koneksi internet.', true); return; }
+            try {
+                const kr = await sb.from('kelas').select('id, nama').order('nama');
+                if (kr.error) throw kr.error;
+                const jr = await ambilSemua(() => sb.from('jurnal').select('kelas_id, tanggal, pertemuan, materi').not('kelas_id', 'is', null).order('pertemuan', { ascending: true, nullsFirst: false }).order('tanggal'));
+                const wb = new ExcelJS.Workbook(), tepi = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                const pakai = new Set();
+                const kolom = [[1, 3], [4, 12], [13, 20]];
+                kr.data.forEach(k => {
+                    let nm = (k.nama.replace(/[\[\]:*?\/\\]/g, ' ').trim().slice(0, 28)) || 'Kelas', x = nm, i = 2;
+                    while (pakai.has(x)) x = nm + ' ' + i++;
+                    pakai.add(x);
+                    const ws = wb.addWorksheet(x), data = jr.filter(r => r.kelas_id === k.id);
+                    ws.getColumn(1).width = 3.7; ws.getColumn(2).width = 30.1; ws.getColumn(3).width = 4.1;
+                    ws.mergeCells('A1:T1');
+                    ws.getCell('A1').value = `JURNAL MENGAJAR MATEMATIKA — ${NAMA_SEKOLAH} — Kelas ${k.nama}`;
+                    ws.getCell('A1').font = { bold: true, size: 13 }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+                    const slot = Math.max(18, Math.ceil(data.length / 3) * 3);
+                    for (let n = 0; n < slot; n++) {
+                        const e = data[n], r0 = 2 + Math.floor(n / 3) * 5, [c1, c2] = kolom[n % 3];
+                        ws.mergeCells(r0, c1, r0, c2); ws.mergeCells(r0 + 1, c1, r0 + 1, c2); ws.mergeCells(r0 + 2, c1, r0 + 4, c2);
+                        ws.getCell(r0, c1).value = 'Pertemuan : ' + (e && e.pertemuan != null ? e.pertemuan : '');
+                        ws.getCell(r0 + 1, c1).value = 'Hari/Tanggal : ' + (e ? fTglHari(e.tanggal) : '');
+                        ws.getCell(r0 + 2, c1).value = 'Materi : ' + (e && e.materi ? e.materi : '');
+                        ws.getCell(r0 + 2, c1).alignment = { vertical: 'top', wrapText: true };
+                        for (let r = r0; r <= r0 + 4; r++) for (let c = c1; c <= c2; c++) ws.getCell(r, c).border = tepi;
+                    }
+                });
+                const buf = await wb.xlsx.writeBuffer();
+                const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const a = document.createElement('a'); a.href = url; a.download = 'Jurnal_Mengajar_Matematika.xlsx';
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+                showToast('Jurnal diunduh.');
+            } catch (e) { console.error(e); showToast('Gagal membuat file: ' + e.message, true); }
         }
 
         // === GAME: mode fokus & info kelas ===
@@ -1059,6 +1167,7 @@
         function setAbsen(id, n) {
             const st = window.absenState, cur = st.data[id];
             const baru = (cur && cur.s === n) ? null : n;
+            st.kotor = true;
             st.data[id] = baru ? { s: baru, c: cur ? cur.c : '' } : undefined;
             const row = document.getElementById('ar-' + id);
             row.querySelectorAll('.abs-btn').forEach(b => { b.className = 'abs-btn' + (b.dataset.s === baru ? ' aktif ' + baru : ''); });
@@ -1086,9 +1195,14 @@
                 const { error } = await sb.from('absensi').upsert(rows, { onConflict: 'siswa_id,tanggal' });
                 if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan ulang supabase_patch_3.sql bila status ditolak)', true); return; }
             }
+            const pt = parseInt(document.getElementById('ab-pert')?.value, 10), mt = (document.getElementById('ab-materi')?.value || '').trim();
+            if (pt || mt) {
+                const { error } = await sb.from('jurnal').upsert({ kelas_id: st.kelasId, tanggal: st.tanggal, pertemuan: pt || null, materi: mt || null, jenis: 'harian' }, { onConflict: 'kelas_id,tanggal' });
+                if (error) { showToast('Absensi tersimpan, tetapi pertemuan/materi gagal disimpan (jalankan supabase_patch_6.sql).', true); return; }
+            }
             st.tersimpan = new Set(rows.map(r => r.siswa_id));
-            const dot = document.getElementById('dot-absen');
-            if (dot) dot.style.display = 'none';
+            window.pengingatCache = null; perbaruiTitik();
+            st.kotor = false;
             showToast('Absensi tersimpan (' + rows.length + ' siswa).');
         }
 
@@ -1394,6 +1508,227 @@
                 document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
                 showToast('Workbook diunduh.');
             } catch (e) { console.error(e); showToast('Gagal membuat workbook: ' + e.message, true); }
+        }
+
+        // === JADWAL MENGAJAR, HARI INI & PENGATURAN ===
+        const jamSekarang = () => new Date().toTimeString().slice(0, 5);
+        const JAM_DEMO = [['07:00', '07:30'], ['07:30', '08:00'], ['08:00', '08:30'], ['08:30', '09:00'], ['09:00', '09:30'], ['09:30', '10:00'], ['10:30', '11:00'], ['11:00', '11:30'], ['11:30', '12:00'], ['13:00', '13:30'], ['13:30', '14:00']];
+        const BLOK_DEMO = [[1, 'XII 5', 1, 3], [1, 'X 4', 4, 5], [2, 'X 1', 1, 2], [2, 'X 3', 3, 4], [2, 'XII 4', 5, 7], [3, 'X 3', 1, 2], [3, 'X 4', 3, 4], [4, 'X 2', 1, 2], [4, 'X 1', 3, 4], [4, 'XII 6', 5, 7], [5, 'XII 4', 2, 2, 'K'], [5, 'XII 5', 2, 2, 'K'], [5, 'XII 6', 2, 2, 'K'], [5, 'X 2', 5, 6]];
+        async function ambilJadwalData(semester, paksa) {
+            const c = window.jadwalCache;
+            if (!paksa && c && c.semester === semester && Date.now() - c.t < 60000) return c.data;
+            let data;
+            if (!sb) {
+                const jam = {}, nama = {}, rows = [];
+                JAM_DEMO.forEach((j, i) => { jam[i + 1] = { mulai: j[0], selesai: j[1] }; });
+                BLOK_DEMO.forEach(([hari, kls, a, b, k]) => { nama[kls] = kls; for (let j = a; j <= b; j++) rows.push({ id: kls + hari + j, kelas_id: kls, hari, jam_ke: j, jenis: k ? 'Kokurikuler' : 'Reguler' }); });
+                data = { rows, jam, nama };
+            } else {
+                const [jd, jm, kr] = await Promise.all([
+                    sb.from('jadwal').select('id, kelas_id, hari, jam_ke, jenis').eq('semester', semester).order('hari').order('jam_ke'),
+                    sb.from('jam_pelajaran').select('jam_ke, mulai, selesai').order('jam_ke'),
+                    sb.from('kelas').select('id, nama').order('nama')
+                ]);
+                if (jd.error || jm.error || kr.error) throw new Error('gagal memuat jadwal');
+                const jam = {}, nama = {};
+                jm.data.forEach(j => { jam[j.jam_ke] = { mulai: String(j.mulai).slice(0, 5), selesai: String(j.selesai).slice(0, 5) }; });
+                kr.data.forEach(k => { nama[k.id] = k.nama; });
+                data = { rows: jd.data, jam, nama };
+            }
+            window.jadwalCache = { semester, t: Date.now(), data };
+            return data;
+        }
+        function susunBlok(rows, nama, filterKelas) {
+            const per = {};
+            rows.filter(r => !filterKelas || r.kelas_id === filterKelas).forEach(r => {
+                const h = (per[r.hari] = per[r.hari] || {});
+                const e = (h[r.jam_ke] = h[r.jam_ke] || { ids: [], jenis: r.jenis || 'Reguler' });
+                if (!e.ids.includes(r.kelas_id)) e.ids.push(r.kelas_id);
+            });
+            const urut = (a, b) => (nama[a] || '').localeCompare(nama[b] || '', 'id', { numeric: true });
+            const hasil = {};
+            Object.keys(per).forEach(h => {
+                const blok = [];
+                Object.keys(per[h]).map(Number).sort((a, b) => a - b).forEach(j => {
+                    const e = per[h][j], ids = e.ids.slice().sort(urut), kunci = ids.join(',') + '|' + e.jenis, l = blok[blok.length - 1];
+                    if (l && l.kunci === kunci && l.sampai === j - 1) l.sampai = j; else blok.push({ kunci, dari: j, sampai: j, ids, jenis: e.jenis });
+                });
+                hasil[h] = blok;
+            });
+            return hasil;
+        }
+        function ubahJadwal(k, v) { window.jadwalState[k] = v; renderContent('infokelas'); }
+        async function kelasSekarang() {
+            if (!sb) return null;
+            try {
+                const dow = new Date().getDay();
+                if (dow < 1 || dow > 5) return null;
+                const data = await ambilJadwalData(semesterSaatIni());
+                const now = jamSekarang();
+                const b = (susunBlok(data.rows, data.nama)[dow] || []).find(x => data.jam[x.sampai] && now < data.jam[x.sampai].selesai);
+                return b ? b.ids[0] : null;
+            } catch (e) { return null; }
+        }
+        function bukaAbsensiKelas(id, tgl) {
+            window.absenState = Object.assign(window.absenState || {}, { tab: 'input', kelasId: id, tanggal: tgl || localDate(), autoDone: true });
+            loadContent('absen');
+        }
+        function bukaJurnalKelas(id, tgl) {
+            window.jurnalState = Object.assign(window.jurnalState || {}, { tab: 'tulis', kelasId: id, tanggal: tgl || localDate(), autoDone: true });
+            loadContent('jurnal');
+        }
+        async function htmlHariIni() {
+            const box = (isi) => `<div style="padding:14px; border:1px solid var(--browser-border); border-radius:10px; margin-top:16px; background:var(--card-bg);"><h3 style="color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;">📅 Hari Ini</h3>${isi}</div>`;
+            const dow = new Date().getDay();
+            if (dow < 1 || dow > 5) return box('<p style="font-size:0.85rem; color:var(--text-muted);">Akhir pekan, tidak ada jadwal mengajar.</p>');
+            const data = await ambilJadwalData(semesterSaatIni());
+            if (!data.rows.length) return box('<p style="font-size:0.85rem; color:var(--text-muted);">Jadwal mengajar belum diisi. Atur di Kelola Kelas &amp; Siswa.</p>');
+            const bl = (susunBlok(data.rows, data.nama)[dow] || []).filter(b => data.jam[b.dari] && data.jam[b.sampai]);
+            if (!bl.length) return box('<p style="font-size:0.85rem; color:var(--text-muted);">Tidak ada jadwal mengajar hari ini.</p>');
+            const now = jamSekarang();
+            return box(bl.map(b => {
+                const m = data.jam[b.dari].mulai, s = data.jam[b.sampai].selesai;
+                const status = now >= m && now < s ? '<span class="badge" style="background:#dcfce7; color:#166534; margin:0 0 0 6px;">Berlangsung</span>' : (now >= s ? '<span style="font-size:0.75rem; color:var(--text-muted); margin-left:6px;">selesai</span>' : '');
+                return `<div style="padding:8px 0; border-bottom:1px solid var(--browser-border);"><div><strong>${m}–${s}</strong>${b.jenis === 'Kokurikuler' ? ' <small>(KO)</small>' : ''}${status}</div>${b.ids.map(id => `<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:6px;"><span style="min-width:70px;">${esc(data.nama[id] || '')}</span><button class="btn-outline" onclick="bukaAbsensiKelas('${esc(id)}')">📝 Absensi</button><button class="btn-outline" onclick="bukaJurnalKelas('${esc(id)}')">✍️ Jurnal</button></div>`).join('')}</div>`;
+            }).join(''));
+        }
+        function blokPerKelas(rows) {
+            const urut = rows.slice().sort((a, b) => String(a.kelas_id).localeCompare(String(b.kelas_id)) || a.hari - b.hari || a.jam_ke - b.jam_ke);
+            const out = [];
+            urut.forEach(r => {
+                const l = out[out.length - 1];
+                if (l && l.kelas_id === r.kelas_id && l.hari === r.hari && l.jenis === r.jenis && l.sampai === r.jam_ke - 1) { l.sampai = r.jam_ke; l.ids.push(r.id); }
+                else out.push({ kelas_id: r.kelas_id, hari: r.hari, jenis: r.jenis, dari: r.jam_ke, sampai: r.jam_ke, ids: [r.id] });
+            });
+            return out;
+        }
+        async function htmlJadwalKelola(kelas) {
+            const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:14px; background:var(--card-bg);';
+            const h3 = 'color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;';
+            if (!kelas.length) return '';
+            window.kelolaSem = window.kelolaSem || semesterSaatIni();
+            let data;
+            try { data = await ambilJadwalData(window.kelolaSem, true); } catch (e) { return `<div style="${box}"><h3 style="${h3}">🗓️ Jadwal Mengajar</h3><p style="color:#b91c1c; font-size:0.85rem;">Gagal memuat. Jalankan supabase_patch_7.sql di Supabase.</p></div>`; }
+            const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'], slots = Object.keys(data.jam).map(Number).sort((a, b) => a - b);
+            const daftar = blokPerKelas(data.rows).sort((a, b) => (data.nama[a.kelas_id] || '').localeCompare(data.nama[b.kelas_id] || '', 'id', { numeric: true }) || a.hari - b.hari || a.dari - b.dari)
+                .map(b => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--browser-border); font-size:0.85rem;"><span><strong>${esc(data.nama[b.kelas_id] || '?')}</strong> · ${hari[b.hari - 1]} · ${data.jam[b.dari] ? data.jam[b.dari].mulai : b.dari}–${data.jam[b.sampai] ? data.jam[b.sampai].selesai : b.sampai} · ${b.jenis}</span><button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusBlokJadwal('${b.ids.join(',')}')">🗑️</button></div>`).join('') || '<p style="font-size:0.85rem; color:var(--text-muted);">Belum ada jadwal pada semester ini.</p>';
+            return `<div style="${box}"><h3 style="${h3}">🗓️ Jadwal Mengajar</h3>
+                <select onchange="window.kelolaSem=this.value; renderContent('kelola')" style="margin-bottom:10px;">${semesterOpsi(window.kelolaSem)}</select>
+                ${daftar}
+                <div style="margin-top:12px; padding-top:10px;"><strong style="font-size:0.9rem;">+ Tambah Blok Jadwal</strong>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; font-size:0.85rem;">${kelas.map(k => `<label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" class="jd-kelas" value="${k.id}" style="width:auto;">${esc(k.nama)}</label>`).join('')}</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <select id="jd-hari" style="flex:1; min-width:90px;">${hari.map((h, i) => `<option value="${i + 1}">${h}</option>`).join('')}</select>
+                        <select id="jd-dari" style="flex:1; min-width:110px;">${slots.map(j => `<option value="${j}">Jam ${j} · ${data.jam[j].mulai}</option>`).join('')}</select>
+                        <select id="jd-sampai" style="flex:1; min-width:110px;">${slots.map(j => `<option value="${j}">s.d. ${j} · ${data.jam[j].selesai}</option>`).join('')}</select>
+                        <select id="jd-jenis" style="flex:1; min-width:110px;"><option>Reguler</option><option>Kokurikuler</option></select>
+                        <button class="btn-outline" onclick="tambahJadwal()">Tambah</button>
+                    </div>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Centang lebih dari satu kelas untuk kelas gabungan (misalnya kokurikuler). Jam pelajaran dapat diubah di Table Editor Supabase, tabel jam_pelajaran.</p>
+                </div></div>`;
+        }
+        async function tambahJadwal() {
+            const sem = window.kelolaSem || semesterSaatIni();
+            const ids = Array.from(document.querySelectorAll('.jd-kelas:checked')).map(c => c.value);
+            const hari = Number(document.getElementById('jd-hari').value), dari = Number(document.getElementById('jd-dari').value), sampai = Number(document.getElementById('jd-sampai').value), jenis = document.getElementById('jd-jenis').value;
+            if (!ids.length) { showToast('Centang minimal satu kelas.', true); return; }
+            if (sampai < dari) { showToast('Jam selesai harus setelah jam mulai.', true); return; }
+            const ada = await sb.from('jadwal').select('kelas_id, jenis').eq('semester', sem).eq('hari', hari).gte('jam_ke', dari).lte('jam_ke', sampai);
+            if (ada.error) { showToast('Gagal: ' + ada.error.message + ' (jalankan supabase_patch_7.sql)', true); return; }
+            const lain = ada.data.filter(r => !ids.includes(r.kelas_id) && !(jenis === 'Kokurikuler' && r.jenis === 'Kokurikuler'));
+            if (lain.length) { const n = window.jadwalCache && window.jadwalCache.data.nama[lain[0].kelas_id]; showToast('Bentrok: jam tersebut sudah dipakai kelas ' + (n || 'lain') + '.', true); return; }
+            const rows = [];
+            ids.forEach(id => { for (let j = dari; j <= sampai; j++) rows.push({ kelas_id: id, semester: sem, hari, jam_ke: j, mapel: 'Matematika', jenis }); });
+            const { error } = await sb.from('jadwal').upsert(rows, { onConflict: 'kelas_id,semester,hari,jam_ke' });
+            if (error) { showToast('Gagal menyimpan: ' + error.message, true); return; }
+            window.jadwalCache = null;
+            showToast('Jadwal ditambahkan.');
+            renderContent('kelola');
+        }
+        async function hapusBlokJadwal(csv) {
+            if (!confirm('Hapus blok jadwal ini?')) return;
+            const { error } = await sb.from('jadwal').delete().in('id', csv.split(','));
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            window.jadwalCache = null;
+            showToast('Jadwal dihapus.');
+            renderContent('kelola');
+        }
+
+        // === PENGINGAT & KELAS GABUNGAN ===
+        function kandidatPertemuan(data, sekarang, hari) {
+            const per = susunBlok(data.rows, data.nama), now = sekarang.toTimeString().slice(0, 5), out = [];
+            for (let i = 0; i < hari; i++) {
+                const d = new Date(sekarang); d.setDate(d.getDate() - i);
+                const dow = d.getDay();
+                if (dow < 1 || dow > 5) continue;
+                const tgl = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                (per[dow] || []).forEach(b => {
+                    const m = data.jam[b.dari], s = data.jam[b.sampai];
+                    if (!m || !s) return;
+                    if (i === 0 && now < s.selesai) return;
+                    b.ids.forEach(id => out.push({ kelasId: id, nama: data.nama[id] || '', tanggal: tgl, jam: m.mulai + '–' + s.selesai, ko: b.jenis === 'Kokurikuler' }));
+                });
+            }
+            return out;
+        }
+        function bacaAbaikan() { try { return JSON.parse(localStorage.getItem('eduverse_abaikan') || '[]'); } catch (e) { return []; } }
+        function abaikanPengingat(kelasId, tgl) {
+            try { const a = bacaAbaikan(); a.push(kelasId + '|' + tgl); localStorage.setItem('eduverse_abaikan', JSON.stringify(a)); } catch (e) {}
+            window.pengingatCache = null;
+            renderContent('home');
+        }
+        async function muatPengingat(paksa) {
+            const titik = (p) => { const a = document.getElementById('dot-absen'), j = document.getElementById('dot-jurnal'); if (a) a.classList.toggle('aktif', p.some(x => x.absen)); if (j) j.classList.toggle('aktif', p.some(x => x.jurnal)); };
+            if (!sb || !guruAuth) { titik([]); return []; }
+            const c = window.pengingatCache;
+            if (!paksa && c && Date.now() - c.t < 60000) { titik(c.data); return c.data; }
+            const data = await ambilJadwalData(semesterSaatIni());
+            const kand = kandidatPertemuan(data, new Date(), 14);
+            let hasil = [];
+            if (kand.length) {
+                const awal = kand.map(k => k.tanggal).sort()[0], akhir = localDate(), kelasIds = [...new Set(kand.map(k => k.kelasId))];
+                const [sw, ab, jr] = await Promise.all([
+                    ambilSemua(() => sb.from('siswa').select('id, kelas_id')),
+                    ambilSemua(() => sb.from('absensi').select('siswa_id, tanggal').gte('tanggal', awal).lte('tanggal', akhir)),
+                    ambilSemua(() => sb.from('jurnal').select('kelas_id, tanggal, materi, kokurikuler').in('kelas_id', kelasIds).gte('tanggal', awal).lte('tanggal', akhir))
+                ]);
+                const kelasDari = {}; sw.forEach(x => { kelasDari[x.id] = x.kelas_id; });
+                const adaAbs = new Set(ab.map(r => kelasDari[r.siswa_id] + '|' + r.tanggal));
+                const adaJur = new Set(jr.filter(r => (r.materi && r.materi.trim()) || (r.kokurikuler && r.kokurikuler.trim())).map(r => r.kelas_id + '|' + r.tanggal));
+                const abaikan = bacaAbaikan();
+                hasil = kand.map(k => { const key = k.kelasId + '|' + k.tanggal; return { ...k, absen: !adaAbs.has(key), jurnal: !adaJur.has(key), key }; })
+                    .filter(k => (k.absen || k.jurnal) && !abaikan.includes(k.key))
+                    .sort((a, b) => b.tanggal.localeCompare(a.tanggal) || a.jam.localeCompare(b.jam));
+            }
+            window.pengingatCache = { t: Date.now(), data: hasil };
+            titik(hasil);
+            return hasil;
+        }
+        async function perbaruiTitik() { try { await muatPengingat(true); } catch (e) {} }
+        async function htmlPengingat() {
+            const p = await muatPengingat();
+            if (!p.length) return '';
+            const baris = p.slice(0, 6).map(x => `<div style="padding:8px 0; border-bottom:1px solid var(--browser-border);"><div style="font-size:0.85rem;"><strong>${fTglHari(x.tanggal)}</strong> · ${esc(x.nama)} (${x.jam})${x.ko ? ' KO' : ''}</div><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">${x.absen ? `<button class="btn-outline" onclick="bukaAbsensiKelas('${esc(x.kelasId)}','${x.tanggal}')">📝 Absensi</button>` : ''}${x.jurnal ? `<button class="btn-outline" onclick="bukaJurnalKelas('${esc(x.kelasId)}','${x.tanggal}')">✍️ Jurnal</button>` : ''}<button class="btn-outline" title="Libur atau tidak ada pembelajaran" onclick="abaikanPengingat('${esc(x.kelasId)}','${x.tanggal}')">✖ Libur</button></div></div>`).join('');
+            return `<div style="padding:14px; border:1px solid #f59e0b; border-radius:10px; margin-top:16px; background:var(--card-bg);"><h3 style="color:#92400e; font-size:1rem; margin-bottom:6px;">🔔 Perlu Dilengkapi (${p.length})</h3><p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Pertemuan terjadwal 14 hari terakhir yang absensi atau jurnalnya belum terisi.</p>${baris}${p.length > 6 ? `<p style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">…dan ${p.length - 6} lainnya</p>` : ''}</div>`;
+        }
+        async function blokGabungan(kelasId, tanggal) {
+            const dow = new Date(tanggal + 'T00:00:00').getDay();
+            if (dow < 1 || dow > 5) return [];
+            const data = await ambilJadwalData(semesterSaatIni());
+            const b = (susunBlok(data.rows, data.nama)[dow] || []).find(x => x.ids.includes(kelasId) && x.ids.length > 1);
+            return b ? b.ids.map(id => ({ id, nama: data.nama[id] })) : [];
+        }
+        async function pertemuanUntuk(kelasId, tanggal) {
+            const [a, b] = await Promise.all([
+                sb.from('jurnal').select('pertemuan').eq('kelas_id', kelasId).eq('tanggal', tanggal).maybeSingle(),
+                sb.from('jurnal').select('pertemuan').eq('kelas_id', kelasId).not('pertemuan', 'is', null).order('pertemuan', { ascending: false }).limit(1)
+            ]);
+            if (a.data && a.data.pertemuan != null) return a.data.pertemuan;
+            return ((b.data && b.data[0] && b.data[0].pertemuan) || 0) + 1;
+        }
+        function pindahKelasAbsen(id) {
+            if (window.absenState.kotor && !confirm('Ada perubahan absensi yang belum disimpan. Pindah kelas?')) return;
+            ubahAbsen('kelasId', id);
         }
 
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
