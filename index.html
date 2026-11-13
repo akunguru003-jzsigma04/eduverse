@@ -247,16 +247,23 @@
         .abs-row { padding: 10px 0; border-bottom: 1px solid var(--browser-border); }
         .abs-nama { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
         .abs-nama span { font-size: 0.75rem; color: var(--text-muted); }
-        .abs-opsi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-        .abs-btn { min-height: 44px; font-size: 0.78rem; font-weight: 700; border-radius: 10px; border: 2px solid var(--browser-border); background: var(--card-bg); color: var(--text-main); cursor: pointer; }
+        .abs-opsi { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+        .abs-btn { min-height: 48px; font-size: 1.3rem; line-height: 1; padding: 2px; font-weight: 700; border-radius: 10px; border: 2px solid var(--browser-border); background: var(--card-bg); color: var(--text-main); cursor: pointer; }
+        .abs-btn:not(.aktif) { filter: grayscale(1); opacity: 0.65; }
         .abs-btn.aktif.Hadir { background: #dcfce7; border-color: #16a34a; color: #166534; }
         .abs-btn.aktif.Terlambat { background: #fef3c7; border-color: #d97706; color: #92400e; }
         .abs-btn.aktif.Sakit { background: #dbeafe; border-color: #2563eb; color: #1e40af; }
         .abs-btn.aktif.Izin { background: #ede9fe; border-color: #7c3aed; color: #5b21b6; }
+        .abs-btn.aktif.Alpa { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
         .abs-cat { margin-top: 6px; width: 100%; }
         #abs-ringkas { display: flex; gap: 6px; flex-wrap: wrap; }
         .abs-chip { font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--browser-border); }
-        .abs-chip.Hadir { background: #dcfce7; color: #166534; } .abs-chip.Terlambat { background: #fef3c7; color: #92400e; } .abs-chip.Sakit { background: #dbeafe; color: #1e40af; } .abs-chip.Izin { background: #ede9fe; color: #5b21b6; }
+        .abs-chip.Hadir { background: #dcfce7; color: #166534; } .abs-chip.Terlambat { background: #fef3c7; color: #92400e; } .abs-chip.Sakit { background: #dbeafe; color: #1e40af; } .abs-chip.Izin { background: #ede9fe; color: #5b21b6; } .abs-chip.Alpa { background: #fee2e2; color: #991b1b; }
+        /* === DAFTAR NILAI === */
+        .nl-sel { padding: 4px; font-size: 0.8rem; width: auto; min-width: 62px; }
+        .nl-tabel th, .nl-tabel td { white-space: nowrap; }
+        .pr-chip { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--browser-border); }
+        .pr-Istimewa { background: #dcfce7; color: #166534; } .pr-Baik { background: #dbeafe; color: #1e40af; } .pr-Cukup { background: #fef3c7; color: #92400e; } .pr-Kurang { background: #fee2e2; color: #991b1b; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -422,19 +429,19 @@
                             dari += 1000;
                         }
                         const baris = siswa.map((x, i) => {
-                            const c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0 };
+                            const c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0, Alpa: 0 };
                             semua.filter(r => r.siswa_id === x.id).forEach(r => { if (c[r.status] !== undefined) c[r.status]++; });
-                            const tot = c.Hadir + c.Terlambat + c.Sakit + c.Izin;
+                            const tot = c.Hadir + c.Terlambat + c.Sakit + c.Izin + c.Alpa;
                             const persen = tot ? Math.round((c.Hadir + c.Terlambat) / tot * 100) + '%' : '-';
-                            return `<tr><td>${i + 1}</td><td>${esc(x.nama)}</td><td>${c.Hadir}</td><td>${c.Terlambat}</td><td>${c.Sakit}</td><td>${c.Izin}</td><td>${persen}</td></tr>`;
+                            return `<tr><td>${i + 1}</td><td>${esc(x.nama)}</td><td>${c.Hadir}</td><td>${c.Terlambat}</td><td>${c.Sakit}</td><td>${c.Izin}</td><td>${c.Alpa}</td><td>${persen}</td></tr>`;
                         }).join('');
                         return atas + `
                             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                                 <select onchange="ubahAbsen('kelasId', this.value)" style="flex:1; min-width:140px;">${opsiKelas}</select>
                                 <input type="month" value="${st.bulan}" onchange="ubahAbsen('bulan', this.value)" style="flex:1; min-width:140px;">
                             </div>
-                            <div style="overflow-x:auto;"><table><tr><th>No</th><th>Nama</th><th>Hadir</th><th>Terlambat</th><th>Sakit</th><th>Izin</th><th>% Hadir</th></tr>${baris}</table></div>
-                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">% Hadir = (Hadir + Terlambat) dibagi jumlah hari yang tercatat.</p>`;
+                            <div style="overflow-x:auto;"><table><tr><th>No</th><th>Nama</th><th>Hadir</th><th>Terlambat</th><th>Sakit</th><th>Izin</th><th>Alpa</th><th>% Hadir</th></tr>${baris}</table></div>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">% Hadir = (Hadir + Terlambat) dibagi jumlah hari yang tercatat (termasuk Alpa).</p>`;
                     }
 
                     const ab = await sb.from('absensi').select('siswa_id, status, catatan').eq('tanggal', st.tanggal).in('siswa_id', ids);
@@ -445,7 +452,7 @@
                         const cur = st.data[x.id];
                         return `<div class="abs-row" id="ar-${x.id}">
                             <div class="abs-nama"><strong>${i + 1}. ${esc(x.nama)}</strong><span>${esc(x.nis)}</span></div>
-                            <div class="abs-opsi">${ABSEN_STATUS.map(([n, ik]) => `<button class="abs-btn ${cur && cur.s === n ? 'aktif ' + n : ''}" data-s="${n}" onclick="setAbsen('${x.id}','${n}')">${ik} ${n}</button>`).join('')}</div>
+                            <div class="abs-opsi">${ABSEN_STATUS.map(([n, ik]) => `<button class="abs-btn ${cur && cur.s === n ? 'aktif ' + n : ''}" data-s="${n}" title="${n}" aria-label="${n}" onclick="setAbsen('${x.id}','${n}')">${ik}</button>`).join('')}</div>
                             <input class="abs-cat" id="ac-${x.id}" placeholder="Keterangan (opsional)" value="${esc(cur ? cur.c : '')}" oninput="absenCatatan('${x.id}', this.value)" style="display:${cur && cur.s !== 'Hadir' ? 'block' : 'none'};">
                         </div>`;
                     }).join('');
@@ -498,61 +505,70 @@
                 }
             },
             nilai: {
-                url: "Modul Asesmen / Rekap Nilai Formatif & Sumatif",
-                getHtml: () => `
-                    <h2 class="view-title">Rekap Nilai Formatif & Sumatif</h2>
-                    
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <select style="flex: 1;"><option>Tahun Ajaran 2026/2027 Ganjil</option></select>
-                        <select style="flex: 1;"><option>Kelas: X MIPA 1</option><option>Kelas: X MIPA 2</option></select>
-                        <select style="flex: 1;"><option>Mata Pelajaran: Fisika</option></select>
-                    </div>
-
-                    <div style="overflow-x: auto; margin-bottom: 20px;">
-                        <table>
-                            <tr>
-                                <th rowspan="2" style="width:40px;">No</th>
-                                <th rowspan="2">Nama Siswa</th>
-                                <th colspan="3">Formatif (Tujuan Pembelajaran)</th>
-                                <th rowspan="2" style="background:#e0f2fe; color:#0369a1;">Sumatif<br>(STS/SAS)</th>
-                            </tr>
-                            <tr>
-                                <th style="font-size:0.75rem;">TP 1 (Vektor)</th>
-                                <th style="font-size:0.75rem;">TP 2 (Kinetika)</th>
-                                <th style="font-size:0.75rem;">TP 3 (Dinamika)</th>
-                            </tr>
-                            <tr>
-                                <td>1</td>
-                                <td>Ahmad Budi</td>
-                                <td><input type="number" value="85" max="100"></td>
-                                <td><input type="number" value="90" max="100"></td>
-                                <td><input type="number" value="88" max="100"></td>
-                                <td style="background:#f0f9ff;"><input type="number" value="86" max="100" style="background:white;"></td>
-                            </tr>
-                            <tr>
-                                <td>2</td>
-                                <td>Citra Kirana</td>
-                                <td><input type="number" value="92" max="100"></td>
-                                <td><input type="number" value="88" max="100"></td>
-                                <td><input type="number" value="95" max="100"></td>
-                                <td style="background:#f0f9ff;"><input type="number" value="90" max="100" style="background:white;"></td>
-                            </tr>
-                            <tr>
-                                <td>3</td>
-                                <td>Deni Pratama</td>
-                                <td><input type="number" value="70" max="100" style="color: #ef4444;"></td>
-                                <td><input type="number" value="75" max="100"></td>
-                                <td><input type="number" value="78" max="100"></td>
-                                <td style="background:#f0f9ff;"><input type="number" value="72" max="100" style="color: #ef4444; background:white;"></td>
-                            </tr>
-                        </table>
-                    </div>
-
-                    <div style="display:flex; gap:10px;">
-                        <button class="btn-submit" style="flex:1;" onclick="showToast('Perubahan Nilai Berhasil Disimpan ke Draft Lokal!')">💾 Simpan Draft</button>
-                        <button class="btn-export" style="flex:1;" onclick="exportToExcel()">📥 Unduh Format Excel (Untuk RDM/E-Rapor)</button>
-                    </div>
-                `
+                url: "Modul Asesmen / Daftar Nilai",
+                getHtml: async () => {
+                    const judul = '<h2 class="view-title">Daftar Nilai</h2>';
+                    if (!sb) return judul + '<p style="color:var(--text-muted);">Daftar Nilai membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
+                    const st = (window.nilaiState = window.nilaiState || { tab: 'input' });
+                    const kr = await sb.from('kelas').select('id, nama').order('nama');
+                    if (kr.error) return judul + '<p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
+                    if (!kr.data.length) return judul + '<p style="color:var(--text-muted);">Belum ada kelas. Tambahkan di Kelola Kelas &amp; Siswa.</p>';
+                    if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
+                    let d;
+                    st.semester = st.semester || semesterSaatIni();
+                    try { d = await muatNilai(st.kelasId, st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat nilai. Pastikan supabase_patch_4.sql sudah dijalankan.</p>'; }
+                    window.nilaiD = d;
+                    const opsiKelas = kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
+                    if (!d.materi.length) return judul + `<select onchange="ubahNilai('kelasId', this.value)" style="margin-bottom:12px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="margin:0 0 12px 8px;">${semesterOpsi(st.semester)}</select><p style="color:var(--text-muted);">Belum ada materi pada semester ini. Atur Materi &amp; TP di menu Modul (MPI), tab Materi &amp; TP.</p>`;
+                    if (!d.materi.some(m => m.id === st.materiId)) st.materiId = d.materi[0].id;
+                    const m = d.materi.find(x => x.id === st.materiId);
+                    const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="ubahNilai('tab','${k}')">${label}</button>`;
+                    const atas = `${judul}<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${tabBtn('input', '📝 Input Nilai')}${tabBtn('rekap', '📊 Rekap Gabungan')}</div>`;
+                    if (st.tab === 'rekap') {
+                        const hit = {};
+                        d.materi.forEach(mm => { hit[mm.id] = { Istimewa: 0, Baik: 0, Cukup: 0, Kurang: 0, total: 0 }; d.siswa.forEach(x => { const p = tampilNilai(d, mm.id, x.id).pred; if (p) { hit[mm.id][p]++; hit[mm.id].total++; } }); });
+                        const preds = [['Istimewa', '≥ 90'], ['Baik', '75–89'], ['Cukup', '60–74'], ['Kurang', '< 60']];
+                        const baris = preds.map(([p, r]) => `<tr><td><span class="pr-chip pr-${p}">${p}</span></td><td>${r}</td>${d.materi.map(mm => `<td>${hit[mm.id][p]}</td>`).join('')}<td><b>${d.materi.reduce((a, mm) => a + hit[mm.id][p], 0)}</b></td></tr>`).join('');
+                        return atas + `<select onchange="ubahNilai('kelasId', this.value)" style="margin-bottom:12px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="margin:0 0 12px 8px;">${semesterOpsi(st.semester)}</select><div style="overflow-x:auto;"><table><tr><th>Predikat</th><th>Rentang</th>${d.materi.map(mm => `<th>${esc(mm.nama)}</th>`).join('')}<th>Total</th></tr>${baris}<tr><td colspan="2"><b>Siswa Dinilai</b></td>${d.materi.map(mm => `<td><b>${hit[mm.id].total}</b></td>`).join('')}<td><b>${d.materi.reduce((a, mm) => a + hit[mm.id].total, 0)}</b></td></tr></table></div><button class="btn-outline" style="margin-top:12px;" onclick="unduhWorkbook()">📗 Unduh Workbook Excel (semua materi)</button>`;
+                    }
+                    const tps = d.tp[m.id];
+                    const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+                    const selesai = m.tanggal_selesai && m.tanggal_selesai < hariIni;
+                    const opsiMateri = d.materi.map(mm => `<option value="${mm.id}" ${mm.id === m.id ? 'selected' : ''}>${esc(mm.nama)}</option>`).join('');
+                    const kepala = tps.map((t, i) => `<th title="${esc(t.deskripsi)}">F${i + 1}</th>`).join('');
+                    const baris = d.siswa.map((x, i) => {
+                        const n = tampilNilai(d, m.id, x.id);
+                        const sel = tps.map(t => { const v = d.f[x.id + '|' + t.id] || ''; return `<td><select class="nl-sel" onchange="simpanF('${x.id}','${t.id}',this.value)"><option value=""></option>${['IST', 'BAIK', 'PB'].map(o => `<option ${v === o ? 'selected' : ''}>${o}</option>`).join('')}</select></td>`; }).join('');
+                        return `<tr><td>${i + 1}</td><td style="white-space:nowrap; text-align:left;">${esc(x.nama)}</td>${sel}<td id="sf-${x.id}">${fn1(n.skorF)}</td><td><input type="number" min="0" max="100" step="0.01" value="${n.sum ?? ''}" onchange="simpanS('${x.id}','${m.id}',this.value)" style="width:72px; padding:4px;"></td><td>${n.hadir ?? '-'}</td><td>${n.efektif ?? '-'}</td><td>${fpct(n.persen)}</td><td id="ak-${x.id}"><b>${fn1(n.akhir)}</b></td><td><span id="pr-${x.id}" class="pr-chip pr-${n.pred || 'kosong'}">${n.pred || '-'}</span></td></tr>`;
+                    }).join('');
+                    return atas + `
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+                            <select onchange="ubahNilai('kelasId', this.value)" style="flex:1; min-width:120px;">${opsiKelas}</select>
+                            <select onchange="ubahNilai('semester', this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select>
+                            <select onchange="ubahNilai('materiId', this.value)" style="flex:2; min-width:160px;">${opsiMateri}</select>
+                        </div>
+                        ${selesai ? `<div style="padding:10px; border-radius:8px; background:#dcfce7; color:#166534; font-size:0.85rem; margin-bottom:10px;">✔ Periode materi ini sudah selesai (${fTgl(m.tanggal_selesai)}). Laporan untuk wali kelas siap dibuat.</div>` : ''}
+                        ${!m.tanggal_mulai || !m.tanggal_selesai ? '<div style="padding:10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.85rem; margin-bottom:10px;">Periode materi belum diatur di MPI, sehingga kehadiran dan Skor Akhir belum dapat dihitung.</div>' : ''}
+                        ${!tps.length ? '<div style="padding:10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.85rem; margin-bottom:10px;">Materi ini belum punya TP. Tambahkan di MPI, tab Materi &amp; TP.</div>' : ''}
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+                            <span style="font-size:0.8rem; color:var(--text-muted);">Periode: ${fTgl(m.tanggal_mulai)} – ${fTgl(m.tanggal_selesai)}</span>
+                            <span id="nl-status" style="font-size:0.8rem; color:#16a34a;"></span>
+                        </div>
+                        <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th>${kepala}<th>Skor Formatif</th><th>Sumatif</th><th>Hadir</th><th>Hari Efektif</th><th>% Hadir</th><th>Skor Akhir</th><th>Predikat</th></tr>${baris}</table></div>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:8px 0;">Formatif: IST=100, BAIK=90, PB=75 (rata-rata kolom terisi). Skor Akhir = 40% formatif + 40% sumatif + 20% kehadiran. Kehadiran = Hadir + Terlambat dibagi hari absensi tercatat pada periode materi.</p>
+                        ${tps.length ? `<div style="font-size:0.8rem; margin-bottom:10px;">${tps.map((t, i) => `<div><b>F${i + 1}</b> · ${esc(t.deskripsi)}</div>`).join('')}</div>` : ''}
+                        <div style="padding:12px; border:1px solid var(--browser-border); border-radius:8px; background:var(--card-bg);">
+                            <strong style="font-size:0.9rem;">📄 Laporan &amp; Ekspor</strong>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;"><input value="${esc(d.kelas.wali_kelas || '')}" placeholder="Nama wali kelas" onchange="simpanWali(this.value)" style="flex:1; min-width:160px;"></div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <button class="btn-outline" onclick="bukaLaporan()">🖨️ Cetak / PDF</button>
+                                <button class="btn-outline" onclick="unduhLaporanExcel()">⬇️ Excel</button>
+                                <button class="btn-outline" onclick="salinRingkasan()">📋 Salin Ringkasan</button>
+                                <button class="btn-outline" onclick="unduhWorkbook()">📗 Workbook Excel (semua materi)</button>
+                            </div>
+                        </div>
+                    `;
+                }
             },
             kelola: {
                 url: "Dashboard / Kelola Kelas & Siswa",
@@ -750,13 +766,16 @@
             },
             mpi: {
                 url: "Modul Interaktif / Pustaka",
-                getHtml: () => `
-                    <h2 class="view-title">Pustaka Modul Ajar & MPI</h2>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>📚 Modul Ajar (RPP Plus)</h4><p style="font-size:0.8rem; color:var(--text-muted);">Tersinkronisasi dengan Jurnal Harian.</p></div>
-                        <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>🎲 Media Interaktif</h4><p style="font-size:0.8rem; color:var(--text-muted);">Kuis, Game edukasi, Simulasi.</p></div>
-                    </div>
-                `
+                getHtml: async () => {
+                    const st = (window.mpiState = window.mpiState || { tab: 'pustaka' });
+                    const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="pilihMpiTab('${k}')">${label}</button>`;
+                    const pustaka = `
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>📚 Modul Ajar (RPP Plus)</h4><p style="font-size:0.8rem; color:var(--text-muted);">Tersinkronisasi dengan Daily Journal.</p></div>
+                            <div style="padding:15px; border:1px solid var(--browser-border); border-radius:8px;"><h4>🎲 Media Interaktif</h4><p style="font-size:0.8rem; color:var(--text-muted);">Kuis, Game edukasi, Simulasi.</p></div>
+                        </div>`;
+                    return `<h2 class="view-title">Pustaka Modul Ajar & MPI</h2><div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">${tabBtn('pustaka', '📚 Pustaka')}${tabBtn('materi', '📘 Materi & TP')}</div>` + (st.tab === 'materi' ? await htmlMateri(st) : pustaka);
+                }
             }
         };
 
@@ -984,7 +1003,12 @@
             rd.onload = (e) => {
                 try {
                     const wb = XLSX.read(e.target.result, { type: 'array' });
-                    const baris = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: false });
+                    let baris = [];
+                    for (const nm of wb.SheetNames) {
+                        const b = XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, defval: '', raw: false });
+                        if (b.some(r => r.some(c => /^(nis|nisn|no[. ]*induk)$/i.test(String(c).trim())) && r.some(c => /^nama/i.test(String(c).trim())))) { baris = b; break; }
+                        if (!baris.length) baris = b;
+                    }
                     const isNis = (c) => /^(nis|nisn|no[. ]*induk)$/i.test(String(c).trim());
                     const isNama = (c) => /^nama/i.test(String(c).trim());
                     let iNis = 0, iNama = 1, mulai = 0;
@@ -1024,12 +1048,12 @@
         }
 
         // === ABSENSI: Hadir, Terlambat, Sakit, Izin ===
-        const ABSEN_STATUS = [['Hadir', '✔'], ['Terlambat', '⏰'], ['Sakit', '🤒'], ['Izin', '📝']];
+        const ABSEN_STATUS = [['Hadir', '✔'], ['Terlambat', '⏰'], ['Sakit', '🤒'], ['Izin', '📝'], ['Alpa', '❌']];
         function ubahAbsen(k, v) { window.absenState[k] = v; renderContent('absen'); }
         function hitungAbsen() {
-            const st = window.absenState, c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0 };
+            const st = window.absenState, c = { Hadir: 0, Terlambat: 0, Sakit: 0, Izin: 0, Alpa: 0 };
             Object.values(st.data).forEach(v => { if (v && v.s) c[v.s]++; });
-            const isi = c.Hadir + c.Terlambat + c.Sakit + c.Izin;
+            const isi = c.Hadir + c.Terlambat + c.Sakit + c.Izin + c.Alpa;
             document.getElementById('abs-ringkas').innerHTML = ABSEN_STATUS.map(([n, ik]) => `<span class="abs-chip ${n}">${ik} ${n}: ${c[n]}</span>`).join('') + `<span class="abs-chip">Belum: ${st.jumlah - isi}</span>`;
         }
         function setAbsen(id, n) {
@@ -1060,12 +1084,316 @@
             }
             if (rows.length) {
                 const { error } = await sb.from('absensi').upsert(rows, { onConflict: 'siswa_id,tanggal' });
-                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_3.sql bila status ditolak)', true); return; }
+                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan ulang supabase_patch_3.sql bila status ditolak)', true); return; }
             }
             st.tersimpan = new Set(rows.map(r => r.siswa_id));
             const dot = document.getElementById('dot-absen');
             if (dot) dot.style.display = 'none';
             showToast('Absensi tersimpan (' + rows.length + ' siswa).');
+        }
+
+        // === MATERI, TP, NILAI, LAPORAN ===
+        const NAMA_SEKOLAH = 'MAN 1 Boalemo';
+        const semesterSaatIni = () => (new Date().getMonth() >= 6 ? 'Ganjil' : 'Genap');
+        const semesterOpsi = (v) => ['Ganjil', 'Genap'].map(x => `<option value="${x}" ${x === v ? 'selected' : ''}>Semester ${x}</option>`).join('');
+        function mpiSemester(v) { window.mpiState.semester = v; renderContent('mpi'); }
+        const fTgl = (t) => t ? new Date(t + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'belum diatur';
+        const fn1 = (v) => v == null ? '-' : String(Math.round(v * 10) / 10);
+        const fpct = (v) => v == null ? '-' : Math.round(v * 100) + '%';
+
+        async function ambilSemua(bangun) {
+            let semua = [], dari = 0;
+            while (true) {
+                const { data, error } = await bangun().range(dari, dari + 999);
+                if (error) throw error;
+                semua = semua.concat(data);
+                if (data.length < 1000) return semua;
+                dari += 1000;
+            }
+        }
+        async function muatNilai(kelasId, semester) {
+            const [kr, mt, sw] = await Promise.all([
+                sb.from('kelas').select('id, nama, tahun_ajaran, wali_kelas').eq('id', kelasId).maybeSingle(),
+                sb.from('materi').select('id, nama, urutan, tanggal_mulai, tanggal_selesai').eq('kelas_id', kelasId).eq('semester', semester).order('urutan').order('nama'),
+                sb.from('siswa').select('id, nis, nama').eq('kelas_id', kelasId).order('nama')
+            ]);
+            if (kr.error || mt.error || sw.error) throw new Error('gagal memuat');
+            const materi = mt.data, siswa = sw.data, mids = materi.map(m => m.id), sids = siswa.map(x => x.id);
+            const d = { kelas: kr.data || {}, semester, materi, siswa, tp: {}, f: {}, s: {}, hadir: {} };
+            if (!mids.length) return d;
+            const tps = await ambilSemua(() => sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', mids).order('urutan'));
+            materi.forEach(m => { d.tp[m.id] = tps.filter(t => t.materi_id === m.id); });
+            if (!sids.length) return d;
+            const tpIds = tps.map(t => t.id);
+            const [fs, ss] = await Promise.all([
+                tpIds.length ? ambilSemua(() => sb.from('nilai_formatif').select('siswa_id, tp_id, predikat').in('tp_id', tpIds)) : [],
+                ambilSemua(() => sb.from('nilai_sumatif').select('siswa_id, materi_id, skor').in('materi_id', mids))
+            ]);
+            fs.forEach(r => { d.f[r.siswa_id + '|' + r.tp_id] = r.predikat; });
+            ss.forEach(r => { d.s[r.siswa_id + '|' + r.materi_id] = Number(r.skor); });
+            await Promise.all(materi.map(async m => {
+                if (!m.tanggal_mulai || !m.tanggal_selesai) { d.hadir[m.id] = null; return; }
+                const rows = await ambilSemua(() => sb.from('absensi').select('siswa_id, tanggal, status').in('siswa_id', sids).gte('tanggal', m.tanggal_mulai).lte('tanggal', m.tanggal_selesai));
+                const per = {};
+                rows.forEach(r => { if (r.status === 'Hadir' || r.status === 'Terlambat') per[r.siswa_id] = (per[r.siswa_id] || 0) + 1; });
+                d.hadir[m.id] = { efektif: new Set(rows.map(r => r.tanggal)).size, per };
+            }));
+            return d;
+        }
+        function tampilNilai(d, mid, sid) {
+            const poin = { IST: 100, BAIK: 90, PB: 75 };
+            const isi = (d.tp[mid] || []).map(t => d.f[sid + '|' + t.id]).filter(Boolean);
+            const skorF = isi.length ? isi.reduce((a, p) => a + poin[p], 0) / isi.length : null;
+            const sv = d.s[sid + '|' + mid];
+            const sum = (sv === undefined || isNaN(sv)) ? null : sv;
+            const h = d.hadir[mid];
+            const hadir = h ? (h.per[sid] || 0) : null, efektif = h ? h.efektif : null;
+            const persen = (h && h.efektif > 0) ? hadir / h.efektif : null;
+            const akhir = (skorF !== null && sum !== null && persen !== null) ? skorF * 0.4 + sum * 0.4 + persen * 100 * 0.2 : null;
+            const pred = akhir === null ? '' : akhir >= 90 ? 'Istimewa' : akhir >= 75 ? 'Baik' : akhir >= 60 ? 'Cukup' : 'Kurang';
+            return { skorF, sum, hadir, efektif, persen, akhir, pred };
+        }
+        function ubahNilai(k, v) { window.nilaiState[k] = v; renderContent('nilai'); }
+        function segarkanBaris(sid) {
+            const n = tampilNilai(window.nilaiD, window.nilaiState.materiId, sid);
+            const set = (id, t) => { const e = document.getElementById(id + sid); if (e) e.textContent = t; };
+            set('sf-', fn1(n.skorF)); set('ak-', fn1(n.akhir));
+            const p = document.getElementById('pr-' + sid);
+            if (p) { p.textContent = n.pred || '-'; p.className = 'pr-chip pr-' + (n.pred || 'kosong'); }
+            const s = document.getElementById('nl-status');
+            if (s) s.textContent = '✔ Tersimpan ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        }
+        async function simpanF(sid, tid, val) {
+            const hasil = val
+                ? await sb.from('nilai_formatif').upsert({ siswa_id: sid, tp_id: tid, predikat: val }, { onConflict: 'siswa_id,tp_id' })
+                : await sb.from('nilai_formatif').delete().eq('siswa_id', sid).eq('tp_id', tid);
+            if (hasil.error) { showToast('Gagal menyimpan: ' + hasil.error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            if (val) window.nilaiD.f[sid + '|' + tid] = val; else delete window.nilaiD.f[sid + '|' + tid];
+            segarkanBaris(sid);
+        }
+        async function simpanS(sid, mid, val) {
+            const v = String(val).trim() === '' ? null : Number(val);
+            if (v !== null && (isNaN(v) || v < 0 || v > 100)) { showToast('Nilai sumatif harus 0 sampai 100.', true); return; }
+            const hasil = v === null
+                ? await sb.from('nilai_sumatif').delete().eq('siswa_id', sid).eq('materi_id', mid)
+                : await sb.from('nilai_sumatif').upsert({ siswa_id: sid, materi_id: mid, skor: v }, { onConflict: 'siswa_id,materi_id' });
+            if (hasil.error) { showToast('Gagal menyimpan: ' + hasil.error.message, true); return; }
+            if (v === null) delete window.nilaiD.s[sid + '|' + mid]; else window.nilaiD.s[sid + '|' + mid] = v;
+            segarkanBaris(sid);
+        }
+        async function simpanWali(v) {
+            const { error } = await sb.from('kelas').update({ wali_kelas: v.trim() || null }).eq('id', window.nilaiState.kelasId);
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            window.nilaiD.kelas.wali_kelas = v.trim();
+            showToast('Nama wali kelas disimpan.');
+        }
+
+        // --- Laporan wali kelas ---
+        function dataLaporan() {
+            const d = window.nilaiD, m = d.materi.find(x => x.id === window.nilaiState.materiId);
+            const rows = d.siswa.map((x, i) => ({ no: i + 1, nama: x.nama, ...tampilNilai(d, m.id, x.id) }));
+            const dinilai = rows.filter(r => r.pred);
+            const rata = (a) => a.length ? a.reduce((p, q) => p + q, 0) / a.length : null;
+            const dist = {}; ['Istimewa', 'Baik', 'Cukup', 'Kurang'].forEach(p => { dist[p] = dinilai.filter(r => r.pred === p).length; });
+            return { d, m, rows, dinilai, dist, rataAkhir: rata(dinilai.map(r => r.akhir)), rataHadir: rata(rows.filter(r => r.persen !== null).map(r => r.persen)), perhatian: rows.filter(r => r.pred === 'Cukup' || r.pred === 'Kurang' || (r.persen !== null && r.persen < 0.75)) };
+        }
+        function bukaLaporan() {
+            const L = dataLaporan(), k = L.d.kelas, guru = window.guruNama || 'Guru Matematika';
+            const css = 'body{font-family:Arial,sans-serif;max-width:820px;margin:20px auto;padding:0 16px;color:#111}h1{font-size:18px;text-align:center;margin:0}h2{font-size:14px;text-align:center;margin:2px 0 14px;font-weight:normal}table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}th,td{border:1px solid #444;padding:4px 6px;text-align:center}td.l{text-align:left}th{background:#e5e7eb}.ttd{display:flex;justify-content:space-between;margin-top:40px;font-size:13px}.noprint{margin-bottom:12px}@media print{.noprint{display:none}}';
+            const baris = L.rows.map(r => `<tr><td>${r.no}</td><td class="l">${esc(r.nama)}</td><td>${fn1(r.skorF)}</td><td>${fn1(r.sum)}</td><td>${fpct(r.persen)}</td><td>${fn1(r.akhir)}</td><td>${r.pred || '-'}</td></tr>`).join('');
+            const tps = (L.d.tp[L.m.id] || []).map((t, i) => `<li>F${i + 1}: ${esc(t.deskripsi)}</li>`).join('');
+            const per = L.perhatian.length ? '<ul>' + L.perhatian.map(r => `<li>${esc(r.nama)} — ${r.pred || 'belum ada predikat'}, kehadiran ${fpct(r.persen)}</li>`).join('') + '</ul>' : '<p>Tidak ada.</p>';
+            const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan ${esc(L.m.nama)} - ${esc(k.nama)}</title><style>${css}</style></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>
+                <h1>LAPORAN HASIL PEMBELAJARAN MATEMATIKA</h1><h2>${esc(NAMA_SEKOLAH)} • Semester ${esc(L.d.semester)} ${esc(k.tahun_ajaran || '')}</h2>
+                <p>Kepada Yth. Wali Kelas ${esc(k.nama)}${k.wali_kelas ? ' (' + esc(k.wali_kelas) + ')' : ''}, berikut laporan hasil belajar peserta didik pada akhir periode materi.</p>
+                <table><tr><td class="l" style="width:25%">Materi</td><td class="l">${esc(L.m.nama)}</td></tr><tr><td class="l">Periode</td><td class="l">${fTgl(L.m.tanggal_mulai)} – ${fTgl(L.m.tanggal_selesai)}</td></tr><tr><td class="l">Guru Mata Pelajaran</td><td class="l">${esc(guru)}</td></tr></table>
+                <p><b>Tujuan Pembelajaran</b></p><ul>${tps || '<li>-</li>'}</ul>
+                <p><b>Ringkasan</b>: Istimewa ${L.dist.Istimewa}, Baik ${L.dist.Baik}, Cukup ${L.dist.Cukup}, Kurang ${L.dist.Kurang} (dari ${L.dinilai.length} siswa dinilai). Rata-rata Skor Akhir ${fn1(L.rataAkhir)}; rata-rata kehadiran ${fpct(L.rataHadir)}.</p>
+                <table><tr><th>No</th><th>Nama</th><th>Skor Formatif</th><th>Sumatif</th><th>% Hadir</th><th>Skor Akhir</th><th>Predikat</th></tr>${baris}</table>
+                <p><b>Siswa yang Perlu Perhatian</b> (predikat Cukup/Kurang atau kehadiran di bawah 75%)</p>${per}
+                <div class="ttd"><div>Wali Kelas<br><br><br><br>${esc(k.wali_kelas || '(................)')}</div><div>Guru Mata Pelajaran<br><br><br><br>${esc(guru)}</div></div></body></html>`;
+            const w = window.open('', '_blank');
+            if (!w) { showToast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini.', true); return; }
+            w.document.write(html); w.document.close();
+        }
+        function salinRingkasan() {
+            const L = dataLaporan(), k = L.d.kelas;
+            const teks = `*Laporan Hasil Belajar Matematika*\n${NAMA_SEKOLAH} • Kelas ${k.nama} • Semester ${L.d.semester}\nMateri: ${L.m.nama}\nPeriode: ${fTgl(L.m.tanggal_mulai)} – ${fTgl(L.m.tanggal_selesai)}\n\nPredikat: Istimewa ${L.dist.Istimewa}, Baik ${L.dist.Baik}, Cukup ${L.dist.Cukup}, Kurang ${L.dist.Kurang}\nRata-rata Skor Akhir: ${fn1(L.rataAkhir)}\nRata-rata kehadiran: ${fpct(L.rataHadir)}\n\nPerlu perhatian:\n` + (L.perhatian.length ? L.perhatian.map(r => `- ${r.nama} (${r.pred || 'belum ada predikat'}, hadir ${fpct(r.persen)})`).join('\n') : '- Tidak ada') + `\n\nGuru: ${window.guruNama || 'Guru Matematika'}`;
+            (navigator.clipboard ? navigator.clipboard.writeText(teks) : Promise.reject()).then(() => showToast('Ringkasan disalin. Tempel di WhatsApp wali kelas.'), () => showToast('Gagal menyalin. Gunakan tombol Cetak / PDF.', true));
+        }
+        function unduhLaporanExcel() {
+            if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
+            const L = dataLaporan(), k = L.d.kelas, r1 = (v) => v == null ? '' : Math.round(v * 10) / 10;
+            const aoa = [[NAMA_SEKOLAH], ['LAPORAN HASIL PEMBELAJARAN MATEMATIKA'], [], ['Kelas', k.nama], ['Semester', L.d.semester], ['Materi', L.m.nama], ['Periode', fTgl(L.m.tanggal_mulai) + ' - ' + fTgl(L.m.tanggal_selesai)], ['Guru', window.guruNama || ''], ['Wali Kelas', k.wali_kelas || ''], [], ['No', 'Nama', 'Skor Formatif', 'Nilai Sumatif', 'Jml Hadir', 'Hari Efektif', '% Kehadiran', 'Skor Akhir', 'Predikat'], ...L.rows.map(r => [r.no, r.nama, r1(r.skorF), r.sum ?? '', r.hadir ?? '', r.efektif ?? '', r.persen == null ? '' : Math.round(r.persen * 100), r1(r.akhir), r.pred])];
+            const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 6 }, { wch: 32 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 11 }];
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
+            XLSX.writeFile(wb, ('Laporan_' + k.nama + '_' + L.m.nama).replace(/[^\w-]+/g, '_') + '.xlsx');
+        }
+
+        // --- MPI: materi & TP ---
+        function pilihMpiTab(t) { window.mpiState.tab = t; renderContent('mpi'); }
+        function mpiKelas(id) { window.mpiState.kelasId = id; renderContent('mpi'); }
+        async function mpiAksi(janji, pesan) {
+            const { error } = await janji;
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            if (pesan) showToast(pesan);
+            renderContent('mpi');
+        }
+        async function htmlMateri(st) {
+            if (!sb) return '<p style="color:var(--text-muted);">Materi & TP membutuhkan koneksi Supabase.</p>';
+            const kr = await sb.from('kelas').select('id, nama').order('nama');
+            if (kr.error) return '<p style="color:#b91c1c;">Gagal memuat data.</p>';
+            if (!kr.data.length) return '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
+            if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
+            st.semester = st.semester || semesterSaatIni();
+            const mt = await sb.from('materi').select('id, nama, tanggal_mulai, tanggal_selesai').eq('kelas_id', st.kelasId).eq('semester', st.semester).order('urutan').order('nama');
+            if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_patch_4.sql di Supabase.</p>';
+            const mids = mt.data.map(m => m.id);
+            const tp = mids.length ? await sb.from('tp').select('id, materi_id, deskripsi').in('materi_id', mids).order('urutan') : { data: [] };
+            const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:12px; background:var(--card-bg);';
+            const kartu = mt.data.map((m, i) => {
+                const daftar = tp.data.filter(t => t.materi_id === m.id);
+                return `<div class="mt-card" style="${box}">
+                    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;"><strong>${i + 1}. ${esc(m.nama)}</strong><span style="font-size:0.8rem; color:var(--text-muted);">${fTgl(m.tanggal_mulai)} – ${fTgl(m.tanggal_selesai)}</span></div>
+                    ${daftar.map((t, j) => `<div style="display:flex; justify-content:space-between; gap:8px; padding:4px 0; font-size:0.85rem;"><span><b>F${j + 1}</b> · ${esc(t.deskripsi)}</span>${guruAuth ? `<button class="btn-outline" style="padding:0 8px;" onclick="hapusTP('${t.id}')">✖</button>` : ''}</div>`).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Belum ada TP.</p>'}
+                    ${guruAuth ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><input id="tp-${m.id}" placeholder="Tambah TP (satu TP = satu nilai formatif)" style="flex:1; min-width:160px;"><button class="btn-outline" onclick="tambahTP('${m.id}')">+ TP</button></div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center;"><label style="font-size:0.75rem;">Mulai</label><input type="date" value="${m.tanggal_mulai || ''}" onchange="ubahMateri('${m.id}','tanggal_mulai',this.value)"><label style="font-size:0.75rem;">Selesai</label><input type="date" value="${m.tanggal_selesai || ''}" onchange="ubahMateri('${m.id}','tanggal_selesai',this.value)"><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusMateri('${m.id}')">🗑️ Hapus Materi</button></div>` : ''}
+                </div>`;
+            }).join('') || '<p style="color:var(--text-muted);">Belum ada materi.</p>';
+            const form = guruAuth ? `<div style="${box}"><strong style="font-size:0.9rem;">+ Tambah Materi</strong><div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"><input id="mt-nama" placeholder="Nama materi, mis. Eksponen" style="flex:2; min-width:160px;"><input id="mt-mulai" type="date" style="flex:1;"><input id="mt-selesai" type="date" style="flex:1;"><button class="btn-outline" onclick="tambahMateri()">Tambah</button></div></div>` : '';
+            return `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="mpiKelas(this.value)" style="flex:2; min-width:120px;">${kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select><select onchange="mpiSemester(this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select></div>${kartu}${form}`;
+        }
+        async function tambahMateri() {
+            const nama = document.getElementById('mt-nama').value.trim();
+            if (!nama) { showToast('Isi nama materi dahulu.', true); return; }
+            const mulai = document.getElementById('mt-mulai').value || null, selesai = document.getElementById('mt-selesai').value || null;
+            if (mulai && selesai && selesai < mulai) { showToast('Tanggal selesai harus setelah tanggal mulai.', true); return; }
+            await mpiAksi(sb.from('materi').insert({ kelas_id: window.mpiState.kelasId, nama, semester: window.mpiState.semester || semesterSaatIni(), urutan: document.querySelectorAll('.mt-card').length + 1, tanggal_mulai: mulai, tanggal_selesai: selesai }), 'Materi ditambahkan.');
+        }
+        async function ubahMateri(id, kolom, val) { await mpiAksi(sb.from('materi').update({ [kolom]: val || null }).eq('id', id), 'Periode disimpan.'); }
+        async function hapusMateri(id) {
+            if (!confirm('Hapus materi ini beserta seluruh TP dan nilainya?')) return;
+            await mpiAksi(sb.from('materi').delete().eq('id', id), 'Materi dihapus.');
+        }
+        async function tambahTP(mid) {
+            const deskripsi = document.getElementById('tp-' + mid).value.trim();
+            if (!deskripsi) { showToast('Isi deskripsi TP dahulu.', true); return; }
+            const { count } = await sb.from('tp').select('id', { count: 'exact', head: true }).eq('materi_id', mid);
+            await mpiAksi(sb.from('tp').insert({ materi_id: mid, urutan: (count || 0) + 1, deskripsi }), 'TP ditambahkan.');
+        }
+        async function hapusTP(id) {
+            if (!confirm('Hapus TP ini beserta nilai formatifnya?')) return;
+            await mpiAksi(sb.from('tp').delete().eq('id', id), 'TP dihapus.');
+        }
+
+        // === EKSPOR WORKBOOK (semua materi satu semester) ===
+        function muatSkrip(url) {
+            return new Promise((ok, gagal) => { const s = document.createElement('script'); s.src = url; s.onload = ok; s.onerror = () => gagal(new Error('gagal memuat')); document.head.appendChild(s); });
+        }
+        async function unduhWorkbook() {
+            const d = window.nilaiD;
+            if (!d || !d.materi.length) { showToast('Belum ada materi untuk diekspor.', true); return; }
+            showToast('Menyiapkan workbook...');
+            try { if (!window.ExcelJS) await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'); }
+            catch (e) { showToast('Pustaka Excel gagal dimuat. Periksa koneksi internet.', true); return; }
+            try {
+                const wb = new ExcelJS.Workbook();
+                const k = d.kelas, guru = window.guruNama || 'Guru Matematika';
+                const L = (i) => { let s = '', x = i + 1; while (x > 0) { const m = (x - 1) % 26; s = String.fromCharCode(65 + m) + s; x = Math.floor((x - 1) / 26); } return s; };
+                const tepi = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                const isi = (c) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+                const kepala = (c, warna) => { c.fill = isi(warna); c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; c.border = tepi; };
+                const dipakai = new Set(['Rekap Gabungan', 'Panduan']);
+                const namaSheet = (n) => { const b = (n.replace(/[\[\]:*?\/\\]/g, ' ').trim().slice(0, 28)) || 'Materi'; let x = b, i = 2; while (dipakai.has(x)) x = b + ' ' + i++; dipakai.add(x); return x; };
+                const info = d.materi.map(m => { const tps = d.tp[m.id] || []; return { m, tps, n: Math.max(tps.length, 1), sn: namaSheet(m.nama), baris: Math.max(d.siswa.length, 35) }; });
+                const wsRekap = wb.addWorksheet('Rekap Gabungan'), wsPan = wb.addWorksheet('Panduan');
+                const warnaPred = { Istimewa: ['FFDCFCE7', 'FF166534'], Baik: ['FFDBEAFE', 'FF1E40AF'], Cukup: ['FFFEF3C7', 'FF92400E'], Kurang: ['FFFEE2E2', 'FF991B1B'] };
+
+                info.forEach(o => {
+                    const n = o.n, ws = wb.addWorksheet(o.sn), lastL = L(10 + n), predL = L(10 + n), akhirL = L(9 + n), persL = L(8 + n), sumL = L(5 + n), capL = L(4 + n);
+                    o.predL = predL;
+                    const judul = (r, teks, ukuran, tebal) => { ws.mergeCells(`A${r}:${lastL}${r}`); const c = ws.getCell(`A${r}`); c.value = teks; c.font = { bold: tebal, size: ukuran }; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; };
+                    judul(1, 'DAFTAR NILAI — ' + o.m.nama.toUpperCase(), 14, true);
+                    judul(2, `Satuan Pendidikan : ${NAMA_SEKOLAH}   Guru : ${guru}   Kelas : ${k.nama}   Semester : ${d.semester}   Tahun Pelajaran : ${k.tahun_ajaran || '-'}   Periode : ${fTgl(o.m.tanggal_mulai)} – ${fTgl(o.m.tanggal_selesai)}`, 10, false);
+                    judul(3, `Bobot: Formatif (${n} indikator) 40% | Sumatif 40% | Kehadiran 20% | Formatif: Istimewa=100, Baik=90, PB=75 | Predikat: Istimewa ≥ 90, Baik 75–89, Cukup 60–74, Kurang < 60`, 9, false);
+                    ws.getRow(2).height = 30; ws.getRow(3).height = 28;
+                    const grup = (a, b, teks, warna) => { if (a !== b) ws.mergeCells(`${a}4:${b}4`); const c = ws.getCell(`${a}4`); c.value = teks; kepala(c, warna); };
+                    grup('A', 'C', 'IDENTITAS PESERTA DIDIK', 'FF1E3A8A');
+                    grup('D', capL, `PENILAIAN FORMATIF (${o.tps.length} TP) — IST | BAIK | PB`, 'FF0F766E');
+                    grup(sumL, sumL, 'SUMATIF', 'FF7C3AED');
+                    grup(L(6 + n), L(8 + n), 'KEHADIRAN', 'FFB45309');
+                    grup(akhirL, predL, 'REKAP AKHIR', 'FF1E3A8A');
+                    const kep = ['No', 'NIS', 'Nama Peserta Didik', ...Array.from({ length: n }, (_, j) => 'F' + (j + 1)), 'Skor Formatif (Rata²)', '% Capaian Formatif', 'Nilai Sumatif (0–100)', 'Jml Hari Hadir', 'Total Hari Efektif', '% Kehadiran', 'Skor Akhir', 'PREDIKAT TKA'];
+                    kep.forEach((t, i) => { const c = ws.getCell(5, i + 1); c.value = t; kepala(c, 'FF334155'); });
+                    ws.getRow(5).height = 42;
+                    for (let i = 0; i < o.baris; i++) {
+                        const r = 6 + i, sis = d.siswa[i], nl = sis ? tampilNilai(d, o.m.id, sis.id) : null, row = ws.getRow(r);
+                        row.getCell(1).value = i + 1;
+                        if (sis) { row.getCell(2).value = String(sis.nis); row.getCell(3).value = sis.nama; }
+                        for (let j = 0; j < n; j++) {
+                            const t = o.tps[j], v = (sis && t) ? d.f[sis.id + '|' + t.id] : undefined, c = row.getCell(4 + j);
+                            if (v) c.value = v;
+                            c.dataValidation = { type: 'list', allowBlank: true, formulae: ['"IST,BAIK,PB"'] };
+                        }
+                        const rng = `${L(3)}${r}:${L(2 + n)}${r}`;
+                        const kosong = (v) => v == null ? '' : v;
+                        row.getCell(4 + n).value = { formula: `IFERROR((COUNTIF(${rng},"IST")*100+COUNTIF(${rng},"BAIK")*90+COUNTIF(${rng},"PB")*75)/COUNTA(${rng}),"")`, result: kosong(nl && nl.skorF) };
+                        row.getCell(5 + n).value = { formula: `IFERROR(${L(3 + n)}${r}/100,"")`, result: nl && nl.skorF != null ? nl.skorF / 100 : '' };
+                        if (nl && nl.sum != null) row.getCell(6 + n).value = nl.sum;
+                        if (nl && nl.hadir != null) { row.getCell(7 + n).value = nl.hadir; row.getCell(8 + n).value = nl.efektif; }
+                        row.getCell(9 + n).value = { formula: `IFERROR(${L(6 + n)}${r}/${L(7 + n)}${r},"")`, result: kosong(nl && nl.persen) };
+                        row.getCell(10 + n).value = { formula: `IFERROR(IF(AND(ISNUMBER(${sumL}${r}),ISNUMBER(${persL}${r})),${capL}${r}*100*0.4+${sumL}${r}*0.4+${persL}${r}*100*0.2,""),"")`, result: kosong(nl && nl.akhir) };
+                        row.getCell(11 + n).value = { formula: `IFERROR(IF(ISNUMBER(${akhirL}${r}),IF(${akhirL}${r}>=90,"Istimewa",IF(${akhirL}${r}>=75,"Baik",IF(${akhirL}${r}>=60,"Cukup","Kurang"))),""),"")`, result: (nl && nl.pred) || '' };
+                        row.getCell(4 + n).numFmt = '0.0'; row.getCell(5 + n).numFmt = '0.0%'; row.getCell(9 + n).numFmt = '0%'; row.getCell(10 + n).numFmt = '0.0';
+                        for (let c = 1; c <= 11 + n; c++) { const cell = row.getCell(c); cell.border = tepi; if (c !== 3) cell.alignment = { horizontal: 'center', vertical: 'middle' }; }
+                    }
+                    ws.addConditionalFormatting({ ref: `${predL}6:${predL}${5 + o.baris}`, rules: Object.entries(warnaPred).map(([p, [bg, fg]]) => ({ type: 'cellIs', operator: 'equal', formulae: [`"${p}"`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: bg } }, font: { color: { argb: fg }, bold: true } } })) });
+                    ws.getColumn(1).width = 5; ws.getColumn(2).width = 12; ws.getColumn(3).width = 34;
+                    for (let c = 4; c <= 11 + n; c++) ws.getColumn(c).width = c < 4 + n ? 7 : 13;
+                    ws.getColumn(11 + n).width = 14;
+                    ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
+                    const cat = 6 + o.baris; ws.mergeCells(`A${cat}:${lastL}${cat}`);
+                    ws.getCell(`A${cat}`).value = 'Dihasilkan dari EDUVERSE pada ' + new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) + '. Kolom skor dihitung otomatis dengan rumus.';
+                    ws.getCell(`A${cat}`).font = { italic: true, size: 9 };
+                });
+
+                // Rekap Gabungan
+                const M = info.length, tot = 1 + M;
+                wsRekap.mergeCells(`A1:${L(3 + M)}1`);
+                wsRekap.getCell('A1').value = `REKAP GABUNGAN PREDIKAT TKA — ${k.nama} • SEMESTER ${d.semester.toUpperCase()}`;
+                wsRekap.getCell('A1').font = { bold: true, size: 14 };
+                ['Predikat', ...info.map(o => o.m.nama + ' (Jml)'), 'Total Siswa', 'Keterangan Capaian', 'Rentang Skor'].forEach((t, i) => { const c = wsRekap.getCell(2, i + 1); c.value = t; kepala(c, 'FF1E3A8A'); });
+                const ket = { Istimewa: ['Melampaui capaian pembelajaran secara konsisten.', '≥ 90'], Baik: ['Mencapai tujuan pembelajaran sesuai harapan.', '75–89'], Cukup: ['Menunjukkan kemajuan namun perlu bimbingan.', '60–74'], Kurang: ['Memerlukan pendampingan intensif dari pendidik.', '< 60'] };
+                Object.keys(warnaPred).forEach((p, pi) => {
+                    const r = 3 + pi; wsRekap.getCell(r, 1).value = p;
+                    wsRekap.getCell(r, 1).fill = isi(warnaPred[p][0]); wsRekap.getCell(r, 1).font = { bold: true, color: { argb: warnaPred[p][1] } };
+                    info.forEach((o, i) => {
+                        const jml = d.siswa.filter(x => tampilNilai(d, o.m.id, x.id).pred === p).length;
+                        wsRekap.getCell(r, 2 + i).value = { formula: `COUNTIF('${o.sn.replace(/'/g, "''")}'!${o.predL}6:${o.predL}${5 + o.baris},"${p}")`, result: jml };
+                    });
+                    wsRekap.getCell(r, tot + 1).value = { formula: `SUM(B${r}:${L(tot - 1 + 0)}${r})`, result: info.reduce((a, o) => a + d.siswa.filter(x => tampilNilai(d, o.m.id, x.id).pred === p).length, 0) };
+                    wsRekap.getCell(r, tot + 2).value = ket[p][0]; wsRekap.getCell(r, tot + 3).value = ket[p][1];
+                });
+                const rt = 7; wsRekap.getCell(rt, 1).value = 'TOTAL SISWA DINILAI'; wsRekap.getCell(rt, 1).font = { bold: true };
+                for (let c = 2; c <= tot + 1; c++) {
+                    const hasil = Object.keys(warnaPred).reduce((a, _, pi) => a + (Number((wsRekap.getCell(3 + pi, c).value || {}).result) || 0), 0);
+                    wsRekap.getCell(rt, c).value = { formula: `SUM(${L(c - 1)}3:${L(c - 1)}6)`, result: hasil }; wsRekap.getCell(rt, c).font = { bold: true };
+                }
+                for (let r = 3; r <= rt; r++) for (let c = 1; c <= tot + 3; c++) { const cell = wsRekap.getCell(r, c); cell.border = tepi; if (c > 1 && c <= tot + 1) cell.alignment = { horizontal: 'center' }; }
+                wsRekap.getColumn(1).width = 24; for (let c = 2; c <= tot + 1; c++) wsRekap.getColumn(c).width = 20; wsRekap.getColumn(tot + 2).width = 48; wsRekap.getColumn(tot + 3).width = 14;
+
+                // Panduan
+                const baris = ['PANDUAN PENGGUNAAN — DAFTAR NILAI FORMAT TKA', '', 'ISI WORKBOOK', ...info.map((o, i) => `  Sheet ${i + 3}: ${o.sn} — ${o.tps.length} Formatif (TP) + 1 Sumatif`), '  Sheet 1: Rekap Gabungan — distribusi predikat semua materi', '', 'KOMPONEN & BOBOT', '  Formatif 40%: setiap TP diisi IST (100), BAIK (90), atau PB (75)', '  Sumatif 40%: satu nilai skala 0–100 per materi', '  Kehadiran 20%: (Hadir + Terlambat) ÷ hari absensi tercatat pada periode materi', '', 'RUMUS', '  Skor Formatif = (Jml IST×100 + Jml BAIK×90 + Jml PB×75) ÷ Jml TP terisi', '  Skor Akhir = Capaian Formatif×40% + Sumatif×40% + % Kehadiran×20%', '', 'PREDIKAT TKA', '  Istimewa ≥ 90 | Baik 75–89 | Cukup 60–74 | Kurang < 60', '', 'Nilai dapat diubah langsung di Excel; Skor Akhir dan Predikat terhitung ulang otomatis.'];
+                baris.forEach((t, i) => { const c = wsPan.getCell(i + 1, 1); c.value = t; if (i === 0 || ['ISI WORKBOOK', 'KOMPONEN & BOBOT', 'RUMUS', 'PREDIKAT TKA'].includes(t)) c.font = { bold: true, size: i === 0 ? 14 : 11 }; });
+                wsPan.getColumn(1).width = 110;
+
+                const buf = await wb.xlsx.writeBuffer();
+                const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const a = document.createElement('a'); a.href = url; a.download = ('Daftar_Nilai_' + k.nama + '_' + d.semester).replace(/[^\w-]+/g, '_') + '.xlsx';
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+                showToast('Workbook diunduh.');
+            } catch (e) { console.error(e); showToast('Gagal membuat workbook: ' + e.message, true); }
         }
 
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
