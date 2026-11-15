@@ -282,6 +282,8 @@
         .cbt-no.aktif { outline: 3px solid var(--color-blue); outline-offset: 1px; }
         .cbt-opsi { text-align: left; min-height: 52px; padding: 10px 14px; font-size: 1rem; border-radius: 12px; border: 2px solid var(--browser-border); background: var(--card-bg); color: var(--text-main); cursor: pointer; }
         .cbt-opsi.dipilih { border-color: var(--color-blue); background: rgba(75,163,227,0.18); font-weight: 600; }
+        .rek-chip { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 12px; }
+        .rek-Pakai { background: #dcfce7; color: #166534; } .rek-Revisi { background: #fef3c7; color: #92400e; } .rek-Ganti { background: #fee2e2; color: #991b1b; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -574,6 +576,7 @@
                     if (!sb) return judul + '<p style="color:var(--text-muted);">Daftar Nilai membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
                     const st = (window.nilaiState = window.nilaiState || { tab: 'input' });
                     if (st.tab === 'cbt') return judul + tabNilai(st) + await htmlCbtGuru();
+                    if (st.tab === 'pp') { try { return judul + tabNilai(st) + await htmlPP(); } catch (e) { return judul + tabNilai(st) + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_patch_13.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; } }
                     const kr = await sb.from('kelas').select('id, nama').order('nama');
                     if (kr.error) return judul + '<p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
                     if (!kr.data.length) return judul + '<p style="color:var(--text-muted);">Belum ada kelas. Tambahkan di Kelola Kelas &amp; Siswa.</p>';
@@ -583,17 +586,17 @@
                     try { d = await muatNilai(st.kelasId, st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat nilai. Pastikan supabase_patch_4.sql sudah dijalankan.</p>'; }
                     window.nilaiD = d;
                     const opsiKelas = kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
-                    if (!d.materi.length) return judul + `<select onchange="ubahNilai('kelasId', this.value)" style="margin-bottom:12px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="margin:0 0 12px 8px;">${semesterOpsi(st.semester)}</select><p style="color:var(--text-muted);">${d.tingkat ? 'Belum ada materi Kelas ' + d.tingkat + ' pada semester ini.' : 'Nama kelas harus diawali X, XI, atau XII agar materinya dikenali.'} Atur Materi &amp; TP di menu Modul (MPI), tab Materi &amp; TP.</p>`;
+                    if (!d.materi.length) return judul + tabNilai(st) + `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahNilai('kelasId', this.value)" style="flex:1; min-width:120px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="flex:1; min-width:120px;">${semesterOpsi(st.semester)}</select></div><p style="color:var(--text-muted);">${d.tingkat ? 'Belum ada materi Kelas ' + d.tingkat + ' pada semester ini.' : 'Nama kelas harus diawali X, XI, atau XII agar materinya dikenali.'} Atur Materi &amp; TP di menu Modul (MPI), tab Materi &amp; TP.</p>`;
                     if (!d.materi.some(m => m.id === st.materiId)) st.materiId = d.materi[0].id;
                     const m = d.materi.find(x => x.id === st.materiId);
                     const tabBtn = (k, label) => `<button class="btn-outline" style="${st.tab === k ? 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);' : ''}" onclick="ubahNilai('tab','${k}')">${label}</button>`;
-                    const atas = `${judul}<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${tabBtn('input', '📝 Input Nilai')}${tabBtn('rekap', '📊 Rekap Gabungan')}${tabBtn('cbt', '🧪 CBT Sumatif')}</div>`;
+                    const atas = `${judul}<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${tabBtn('input', '📝 Input Nilai')}${tabBtn('rekap', '📊 Rekap Gabungan')}${tabBtn('cbt', '🧪 CBT Sumatif')}${tabBtn('pp', '🎯 Perbaikan & Pengayaan')}</div>`;
                     if (st.tab === 'rekap') {
                         const hit = {};
                         d.materi.forEach(mm => { hit[mm.id] = { Istimewa: 0, Baik: 0, Cukup: 0, Kurang: 0, total: 0 }; d.siswa.forEach(x => { const p = tampilNilai(d, mm.id, x.id).pred; if (p) { hit[mm.id][p]++; hit[mm.id].total++; } }); });
                         const preds = [['Istimewa', '≥ 90'], ['Baik', '75–89'], ['Cukup', '60–74'], ['Kurang', '< 60']];
                         const baris = preds.map(([p, r]) => `<tr><td><span class="pr-chip pr-${p}">${p}</span></td><td>${r}</td>${d.materi.map(mm => `<td>${hit[mm.id][p]}</td>`).join('')}<td><b>${d.materi.reduce((a, mm) => a + hit[mm.id][p], 0)}</b></td></tr>`).join('');
-                        return atas + `<select onchange="ubahNilai('kelasId', this.value)" style="margin-bottom:12px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="margin:0 0 12px 8px;">${semesterOpsi(st.semester)}</select><div style="overflow-x:auto;"><table><tr><th>Predikat</th><th>Rentang</th>${d.materi.map(mm => `<th>${esc(mm.nama)}</th>`).join('')}<th>Total</th></tr>${baris}<tr><td colspan="2"><b>Siswa Dinilai</b></td>${d.materi.map(mm => `<td><b>${hit[mm.id].total}</b></td>`).join('')}<td><b>${d.materi.reduce((a, mm) => a + hit[mm.id].total, 0)}</b></td></tr></table></div><button class="btn-outline" style="margin-top:12px;" onclick="unduhWorkbook()">📗 Unduh Workbook Excel (semua materi)</button>`;
+                        return atas + `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahNilai('kelasId', this.value)" style="flex:1; min-width:120px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="flex:1; min-width:120px;">${semesterOpsi(st.semester)}</select></div><div style="overflow-x:auto;"><table><tr><th>Predikat</th><th>Rentang</th>${d.materi.map(mm => `<th>${esc(mm.nama)}</th>`).join('')}<th>Total</th></tr>${baris}<tr><td colspan="2"><b>Siswa Dinilai</b></td>${d.materi.map(mm => `<td><b>${hit[mm.id].total}</b></td>`).join('')}<td><b>${d.materi.reduce((a, mm) => a + hit[mm.id].total, 0)}</b></td></tr></table></div><button class="btn-outline" style="margin-top:12px;" onclick="unduhWorkbook()">📗 Unduh Workbook Excel (semua materi)</button>`;
                     }
                     const tps = d.tp[m.id];
                     const hariIni = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -941,7 +944,7 @@
                 const out = appData[menu].getHtml();
                 if (out && typeof out.then === 'function') {
                     contentArea.innerHTML = '<p style="color:var(--text-muted); padding:20px 0;">Memuat data...</p>';
-                    out.then(h => { if (window.renderToken === token) { contentArea.innerHTML = h; if (menu === 'absen' && document.getElementById('abs-ringkas')) hitungAbsen(); if (menu === 'nilai') renderMath(); } });
+                    out.then(h => { if (window.renderToken === token) { contentArea.innerHTML = h; if (menu === 'absen' && document.getElementById('abs-ringkas')) hitungAbsen(); if (menu === 'nilai') { renderMath(); if (document.getElementById('pp-ringkas')) segarkanPP(); } } });
                 } else {
                     contentArea.innerHTML = out;
                     if (menu === 'cbtujian') renderMath();
@@ -1250,18 +1253,18 @@
             ]);
             if (mt.error || sw.error) throw new Error('gagal memuat');
             const materi = mt.data, siswa = sw.data, mids = materi.map(m => m.id), sids = siswa.map(x => x.id);
-            const d = { kelas: kr.data || {}, tingkat, semester, materi, siswa, tp: {}, f: {}, s: {}, hadir: {} };
+            const d = { kelas: kr.data || {}, tingkat, semester, materi, siswa, tp: {}, f: {}, s: {}, pp: {}, hadir: {} };
             if (!mids.length) return d;
-            const tps = await ambilSemua(() => sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', mids).order('urutan'));
+            const tps = await ambilSemua(() => sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', mids).order('urutan').order('id'));
             materi.forEach(m => { d.tp[m.id] = tps.filter(t => t.materi_id === m.id); });
             if (!sids.length) return d;
             const tpIds = tps.map(t => t.id);
             const [fs, ss] = await Promise.all([
                 tpIds.length ? ambilSemua(() => sb.from('nilai_formatif').select('siswa_id, tp_id, predikat').in('tp_id', tpIds)) : [],
-                ambilSemua(() => sb.from('nilai_sumatif').select('siswa_id, materi_id, skor').in('materi_id', mids))
+                ambilSemua(() => sb.from('nilai_sumatif').select('siswa_id, materi_id, skor, skor_awal, status_pp').in('materi_id', mids))
             ]);
             fs.forEach(r => { d.f[r.siswa_id + '|' + r.tp_id] = r.predikat; });
-            ss.forEach(r => { d.s[r.siswa_id + '|' + r.materi_id] = Number(r.skor); });
+            ss.forEach(r => { if (r.skor !== null) d.s[r.siswa_id + '|' + r.materi_id] = Number(r.skor); d.pp[r.siswa_id + '|' + r.materi_id] = { awal: r.skor_awal != null ? Number(r.skor_awal) : null, selesai: r.status_pp === 'selesai' }; });
             await Promise.all(materi.map(async m => {
                 if (!m.tanggal_mulai || !m.tanggal_selesai) { d.hadir[m.id] = null; return; }
                 const rows = await ambilSemua(() => sb.from('absensi').select('siswa_id, tanggal, status').in('siswa_id', sids).gte('tanggal', m.tanggal_mulai).lte('tanggal', m.tanggal_selesai));
@@ -1306,7 +1309,7 @@
             const v = String(val).trim() === '' ? null : Number(val);
             if (v !== null && (isNaN(v) || v < 0 || v > 100)) { showToast('Nilai sumatif harus 0 sampai 100.', true); return; }
             const hasil = v === null
-                ? await sb.from('nilai_sumatif').delete().eq('siswa_id', sid).eq('materi_id', mid)
+                ? await sb.from('nilai_sumatif').update({ skor: null }).eq('siswa_id', sid).eq('materi_id', mid)
                 : await sb.from('nilai_sumatif').upsert({ siswa_id: sid, materi_id: mid, skor: v }, { onConflict: 'siswa_id,materi_id' });
             if (hasil.error) { showToast('Gagal menyimpan: ' + hasil.error.message, true); return; }
             if (v === null) delete window.nilaiD.s[sid + '|' + mid]; else window.nilaiD.s[sid + '|' + mid] = v;
@@ -1322,18 +1325,26 @@
         // --- Laporan wali kelas ---
         function dataLaporan() {
             const d = window.nilaiD, m = d.materi.find(x => x.id === window.nilaiState.materiId);
-            const rows = d.siswa.map((x, i) => ({ no: i + 1, nama: x.nama, ...tampilNilai(d, m.id, x.id) }));
+            const rows = d.siswa.map((x, i) => {
+                const n = tampilNilai(d, m.id, x.id), pp = d.pp[x.id + '|' + m.id] || {}, awal = pp.awal === undefined ? null : pp.awal, kat = katPP(awal);
+                return { no: i + 1, nama: x.nama, ...n, awal, kat, jenis: kat ? PP_INFO[kat].jenis : '', tl: kat ? PP_INFO[kat].ket : '', selesai: !!pp.selesai };
+            });
             const dinilai = rows.filter(r => r.pred);
             const rata = (a) => a.length ? a.reduce((p, q) => p + q, 0) / a.length : null;
             const dist = {}; ['Istimewa', 'Baik', 'Cukup', 'Kurang'].forEach(p => { dist[p] = dinilai.filter(r => r.pred === p).length; });
-            return { d, m, rows, dinilai, dist, rataAkhir: rata(dinilai.map(r => r.akhir)), rataHadir: rata(rows.filter(r => r.persen !== null).map(r => r.persen)), perhatian: rows.filter(r => r.pred === 'Cukup' || r.pred === 'Kurang' || (r.persen !== null && r.persen < 0.75)) };
+            const rem = rows.filter(r => r.jenis === 'REMEDIAL'), pen = rows.filter(r => r.jenis === 'PENGAYAAN');
+            const pp = { rem: rem.length, pen: pen.length, remSelesai: rem.filter(r => r.selesai).length, penSelesai: pen.filter(r => r.selesai).length };
+            const alasan = (r) => [(r.pred === 'Cukup' || r.pred === 'Kurang') ? 'predikat ' + r.pred : '', (r.persen !== null && r.persen < 0.75) ? 'kehadiran ' + fpct(r.persen) : '', (r.jenis === 'REMEDIAL' && !r.selesai) ? 'remedial belum selesai' : ''].filter(Boolean);
+            return { d, m, rows, dinilai, dist, pp, rataAkhir: rata(dinilai.map(r => r.akhir)), rataHadir: rata(rows.filter(r => r.persen !== null).map(r => r.persen)), perhatian: rows.map(r => ({ ...r, alasan: alasan(r) })).filter(r => r.alasan.length) };
         }
+        const tlTeks = (r) => r.jenis ? (r.jenis === 'REMEDIAL' ? 'Remedial' : 'Pengayaan') + ' — ' + r.tl + (r.selesai ? ' ✔' : ' (belum selesai)') : '-';
+        const ringkasPP = (L) => (L.pp.rem + L.pp.pen) ? 'Remedial ' + L.pp.rem + ' siswa (' + L.pp.remSelesai + ' selesai), Pengayaan ' + L.pp.pen + ' siswa (' + L.pp.penSelesai + ' selesai)' : 'belum ada data nilai awal sumatif';
         function bukaLaporan() {
             const L = dataLaporan(), k = L.d.kelas, guru = window.guruNama || 'Guru Matematika';
-            const css = 'body{font-family:Arial,sans-serif;max-width:820px;margin:20px auto;padding:0 16px;color:#111}h1{font-size:18px;text-align:center;margin:0}h2{font-size:14px;text-align:center;margin:2px 0 14px;font-weight:normal}table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}th,td{border:1px solid #444;padding:4px 6px;text-align:center}td.l{text-align:left}th{background:#e5e7eb}.ttd{display:flex;justify-content:space-between;margin-top:40px;font-size:13px}.noprint{margin-bottom:12px}@media print{.noprint{display:none}}';
-            const baris = L.rows.map(r => `<tr><td>${r.no}</td><td class="l">${esc(r.nama)}</td><td>${fn1(r.skorF)}</td><td>${fn1(r.sum)}</td><td>${fpct(r.persen)}</td><td>${fn1(r.akhir)}</td><td>${r.pred || '-'}</td></tr>`).join('');
+            const css = 'body{font-family:Arial,sans-serif;max-width:860px;margin:20px auto;padding:0 16px;color:#111}h1{font-size:18px;text-align:center;margin:0}h2{font-size:14px;text-align:center;margin:2px 0 14px;font-weight:normal}table{border-collapse:collapse;width:100%;font-size:11px;margin:8px 0}th,td{border:1px solid #444;padding:4px 5px;text-align:center}td.l{text-align:left}th{background:#e5e7eb}.ttd{display:flex;justify-content:space-between;margin-top:40px;font-size:13px}.noprint{margin-bottom:12px}@media print{.noprint{display:none}}';
+            const baris = L.rows.map(r => `<tr><td>${r.no}</td><td class="l">${esc(r.nama)}</td><td>${fn1(r.skorF)}</td><td>${fn1(r.awal)}</td><td class="l">${esc(tlTeks(r))}</td><td>${fn1(r.sum)}</td><td>${fpct(r.persen)}</td><td>${fn1(r.akhir)}</td><td>${r.pred || '-'}</td></tr>`).join('');
             const tps = (L.d.tp[L.m.id] || []).map((t, i) => `<li>TP${i + 1}: ${esc(t.deskripsi)}</li>`).join('');
-            const per = L.perhatian.length ? '<ul>' + L.perhatian.map(r => `<li>${esc(r.nama)} — ${r.pred || 'belum ada predikat'}, kehadiran ${fpct(r.persen)}</li>`).join('') + '</ul>' : '<p>Tidak ada.</p>';
+            const per = L.perhatian.length ? '<ul>' + L.perhatian.map(r => `<li>${esc(r.nama)} — ${esc(r.alasan.join(', '))}</li>`).join('') + '</ul>' : '<p>Tidak ada.</p>';
             const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan ${esc(L.m.nama)} - ${esc(k.nama)}</title><style>${css}</style></head><body>
                 <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>
                 <h1>LAPORAN HASIL PEMBELAJARAN MATEMATIKA</h1><h2>${esc(NAMA_SEKOLAH)} • Semester ${esc(L.d.semester)} ${esc(k.tahun_ajaran || '')}</h2>
@@ -1341,8 +1352,9 @@
                 <table><tr><td class="l" style="width:25%">Materi</td><td class="l">${esc(L.m.nama)}</td></tr><tr><td class="l">Periode</td><td class="l">${fTgl(L.m.tanggal_mulai)} – ${fTgl(L.m.tanggal_selesai)}</td></tr><tr><td class="l">Guru Mata Pelajaran</td><td class="l">${esc(guru)}</td></tr></table>
                 <p><b>Tujuan Pembelajaran</b></p><ul>${tps || '<li>-</li>'}</ul>
                 <p><b>Ringkasan</b>: Istimewa ${L.dist.Istimewa}, Baik ${L.dist.Baik}, Cukup ${L.dist.Cukup}, Kurang ${L.dist.Kurang} (dari ${L.dinilai.length} siswa dinilai). Rata-rata Skor Akhir ${fn1(L.rataAkhir)}; rata-rata kehadiran ${fpct(L.rataHadir)}.</p>
-                <table><tr><th>No</th><th>Nama</th><th>Skor Formatif</th><th>Sumatif</th><th>% Hadir</th><th>Skor Akhir</th><th>Predikat</th></tr>${baris}</table>
-                <p><b>Siswa yang Perlu Perhatian</b> (predikat Cukup/Kurang atau kehadiran di bawah 75%)</p>${per}
+                <p><b>Program Perbaikan dan Pengayaan</b>: ${ringkasPP(L)}. Nilai sumatif akhir adalah hasil setelah tindak lanjut; nilai awal ditampilkan sebagai pembanding.</p>
+                <table><tr><th>No</th><th>Nama</th><th>Skor Formatif</th><th>Sumatif Awal</th><th>Tindak Lanjut</th><th>Sumatif Akhir</th><th>% Hadir</th><th>Skor Akhir</th><th>Predikat</th></tr>${baris}</table>
+                <p><b>Siswa yang Perlu Perhatian</b></p>${per}
                 <div class="ttd"><div>Wali Kelas<br><br><br><br>${esc(k.wali_kelas || '(................)')}</div><div>Guru Mata Pelajaran<br><br><br><br>${esc(guru)}</div></div></body></html>`;
             const w = window.open('', '_blank');
             if (!w) { showToast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini.', true); return; }
@@ -1350,14 +1362,16 @@
         }
         function salinRingkasan() {
             const L = dataLaporan(), k = L.d.kelas;
-            const teks = `*Laporan Hasil Belajar Matematika*\n${NAMA_SEKOLAH} • Kelas ${k.nama} • Semester ${L.d.semester}\nMateri: ${L.m.nama}\nPeriode: ${fTgl(L.m.tanggal_mulai)} – ${fTgl(L.m.tanggal_selesai)}\n\nPredikat: Istimewa ${L.dist.Istimewa}, Baik ${L.dist.Baik}, Cukup ${L.dist.Cukup}, Kurang ${L.dist.Kurang}\nRata-rata Skor Akhir: ${fn1(L.rataAkhir)}\nRata-rata kehadiran: ${fpct(L.rataHadir)}\n\nPerlu perhatian:\n` + (L.perhatian.length ? L.perhatian.map(r => `- ${r.nama} (${r.pred || 'belum ada predikat'}, hadir ${fpct(r.persen)})`).join('\n') : '- Tidak ada') + `\n\nGuru: ${window.guruNama || 'Guru Matematika'}`;
+            const teks = `*Laporan Hasil Belajar Matematika*\n${NAMA_SEKOLAH} • Kelas ${k.nama} • Semester ${L.d.semester}\nMateri: ${L.m.nama}\nPeriode: ${fTgl(L.m.tanggal_mulai)} – ${fTgl(L.m.tanggal_selesai)}\n\nPredikat: Istimewa ${L.dist.Istimewa}, Baik ${L.dist.Baik}, Cukup ${L.dist.Cukup}, Kurang ${L.dist.Kurang}\nRata-rata Skor Akhir: ${fn1(L.rataAkhir)}\nRata-rata kehadiran: ${fpct(L.rataHadir)}\nPerbaikan & Pengayaan: ${ringkasPP(L)}\n\nPerlu perhatian:\n` + (L.perhatian.length ? L.perhatian.map(r => `- ${r.nama} (${r.alasan.join(', ')})`).join('\n') : '- Tidak ada') + `\n\nGuru: ${window.guruNama || 'Guru Matematika'}`;
             (navigator.clipboard ? navigator.clipboard.writeText(teks) : Promise.reject()).then(() => showToast('Ringkasan disalin. Tempel di WhatsApp wali kelas.'), () => showToast('Gagal menyalin. Gunakan tombol Cetak / PDF.', true));
         }
         function unduhLaporanExcel() {
             if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
             const L = dataLaporan(), k = L.d.kelas, r1 = (v) => v == null ? '' : Math.round(v * 10) / 10;
-            const aoa = [[NAMA_SEKOLAH], ['LAPORAN HASIL PEMBELAJARAN MATEMATIKA'], [], ['Kelas', k.nama], ['Semester', L.d.semester], ['Materi', L.m.nama], ['Periode', fTgl(L.m.tanggal_mulai) + ' - ' + fTgl(L.m.tanggal_selesai)], ['Guru', window.guruNama || ''], ['Wali Kelas', k.wali_kelas || ''], [], ['No', 'Nama', 'Skor Formatif', 'Nilai Sumatif', 'Jml Hadir', 'Hari Efektif', '% Kehadiran', 'Skor Akhir', 'Predikat'], ...L.rows.map(r => [r.no, r.nama, r1(r.skorF), r.sum ?? '', r.hadir ?? '', r.efektif ?? '', r.persen == null ? '' : Math.round(r.persen * 100), r1(r.akhir), r.pred])];
-            const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 6 }, { wch: 32 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 11 }, { wch: 11 }];
+            const aoa = [[NAMA_SEKOLAH], ['LAPORAN HASIL PEMBELAJARAN MATEMATIKA'], [], ['Kelas', k.nama], ['Semester', L.d.semester], ['Materi', L.m.nama], ['Periode', fTgl(L.m.tanggal_mulai) + ' - ' + fTgl(L.m.tanggal_selesai)], ['Guru', window.guruNama || ''], ['Wali Kelas', k.wali_kelas || ''], ['Perbaikan & Pengayaan', ringkasPP(L)], [],
+                ['No', 'Nama', 'Skor Formatif', 'Sumatif Awal', 'Kategori', 'Jenis Tindak Lanjut', 'Keterangan', 'Status Tindak Lanjut', 'Sumatif Akhir', 'Jml Hadir', 'Hari Efektif', '% Kehadiran', 'Skor Akhir', 'Predikat'],
+                ...L.rows.map(r => [r.no, r.nama, r1(r.skorF), r1(r.awal), r.kat || '', r.jenis, r.tl, r.jenis ? (r.selesai ? 'Selesai' : 'Belum selesai') : '', r.sum ?? '', r.hadir ?? '', r.efektif ?? '', r.persen == null ? '' : Math.round(r.persen * 100), r1(r.akhir), r.pred])];
+            const ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 6 }, { wch: 32 }, { wch: 13 }, { wch: 13 }, { wch: 9 }, { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 13 }, { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 11 }, { wch: 11 }];
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Laporan');
             XLSX.writeFile(wb, ('Laporan_' + k.nama + '_' + L.m.nama).replace(/[^\w-]+/g, '_') + '.xlsx');
         }
@@ -1377,7 +1391,7 @@
             const mt = await sb.from('materi').select('id, nama, elemen, semester, tanggal_mulai, tanggal_selesai').eq('tingkat', st.tingkat).order('urutan').order('nama');
             if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_patch_4, supabase_patch_9, dan supabase_patch_10 di Supabase.</p>';
             const mtSemua = mt.data, tampil = mtSemua.filter(m => m.semester === st.semester), mids = tampil.map(m => m.id);
-            const tp = mids.length ? await sb.from('tp').select('id, materi_id, deskripsi').in('materi_id', mids).order('urutan') : { data: [] };
+            const tp = mids.length ? await sb.from('tp').select('id, materi_id, deskripsi').in('materi_id', mids).order('urutan').order('id') : { data: [] };
             const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:12px; background:var(--card-bg);';
             const kat = SEBARAN[st.tingkat];
             const sorot = 'background:var(--color-blue); color:#fff; border-color:var(--color-blue);';
@@ -1415,8 +1429,9 @@
         async function tambahTP(mid) {
             const daftar = document.getElementById('tp-' + mid).value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
             if (!daftar.length) { showToast('Isi rumusan TP dahulu.', true); return; }
-            const { count } = await sb.from('tp').select('id', { count: 'exact', head: true }).eq('materi_id', mid);
-            await mpiAksi(sb.from('tp').insert(daftar.map((deskripsi, i) => ({ materi_id: mid, urutan: (count || 0) + i + 1, deskripsi }))), daftar.length + ' TP ditambahkan.');
+            const { data: akhir } = await sb.from('tp').select('urutan').eq('materi_id', mid).order('urutan', { ascending: false }).limit(1);
+            const dasar = (akhir && akhir[0] && akhir[0].urutan) || 0;
+            await mpiAksi(sb.from('tp').insert(daftar.map((deskripsi, i) => ({ materi_id: mid, urutan: dasar + i + 1, deskripsi }))), daftar.length + ' TP ditambahkan.');
         }
         async function hapusTP(id) {
             if (!confirm('Hapus TP ini beserta nilai formatifnya?')) return;
@@ -2022,7 +2037,7 @@
         const kotakCbt = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:14px; background:var(--card-bg);';
         function tabNilai(st) {
             const b = (k, l) => `<button class="btn-outline" style="${st.tab === k ? sorotCbt : ''}" onclick="ubahNilai('tab','${k}')">${l}</button>`;
-            return `<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${b('input', '📝 Input Nilai')}${b('rekap', '📊 Rekap Gabungan')}${b('cbt', '🧪 CBT Sumatif')}</div>`;
+            return `<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${b('input', '📝 Input Nilai')}${b('rekap', '📊 Rekap Gabungan')}${b('cbt', '🧪 CBT Sumatif')}${b('pp', '🎯 Perbaikan & Pengayaan')}</div>`;
         }
         function ubahCbt(k, v) { window.cbtG[k] = v; renderContent('nilai'); }
         const selTingkatSem = (g) => `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahCbt('tingkat', this.value)" style="flex:1; min-width:120px;">${['X', 'XI', 'XII'].map(t => `<option value="${t}" ${t === g.tingkat ? 'selected' : ''}>Kelas ${t}</option>`).join('')}</select><select onchange="ubahCbt('semester', this.value)" style="flex:1; min-width:120px;">${semesterOpsi(g.semester)}</select></div>`;
@@ -2030,25 +2045,40 @@
             if (!sb) return '<p style="color:var(--text-muted);">CBT membutuhkan koneksi Supabase.</p>';
             const g = (window.cbtG = window.cbtG || { tab: 'tes', tingkat: 'X', semester: semesterSaatIni(), tesId: null });
             const b = (k, l) => `<button class="btn-outline" style="${g.tab === k ? sorotCbt : ''}" onclick="ubahCbt('tab','${k}')">${l}</button>`;
-            const atas = `<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${b('tes', '📋 Tes')}${b('bank', '🗂️ Bank Soal')}${b('hasil', '📊 Hasil')}</div>`;
+            const atas = `<div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">${b('tes', '📋 Tes')}${b('bank', '🗂️ Bank Soal')}${b('analisis', '🔬 Analisis')}${b('hasil', '📊 Hasil')}</div>`;
             try {
                 if (g.tab === 'bank') return atas + await htmlCbtBank(g);
+                if (g.tab === 'analisis') return atas + await htmlCbtAnalisis(g);
                 if (g.tab === 'hasil') return atas + await htmlCbtHasil(g);
                 return atas + await htmlCbtTes(g);
             } catch (e) { return atas + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_patch_11.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; }
         }
 
         // --- Bank soal ---
+        // === FONDASI SOAL: TP, LEVEL, BANK SOAL ===
+        const LEVEL = { L1: 'Pemahaman', L2: 'Aplikasi', L3: 'Penalaran' };
+        function petaTP(rows) {
+            const per = {}, label = {};
+            rows.slice().sort((a, b) => a.urutan - b.urutan || String(a.id).localeCompare(String(b.id))).forEach(t => { (per[t.materi_id] = per[t.materi_id] || []).push(t); label[t.id] = 'TP' + per[t.materi_id].length; });
+            return { per, label };
+        }
+        const potong = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, n) + '…' : t; };
+        const opsiLevel = (v) => '<option value="">Level</option>' + Object.keys(LEVEL).map(k => `<option value="${k}" ${k === v ? 'selected' : ''}>${k} ${LEVEL[k]}</option>`).join('');
         async function htmlCbtBank(g) {
             const [mt, sl] = await Promise.all([
                 sb.from('materi').select('id, nama, semester').eq('tingkat', g.tingkat).order('urutan'),
-                sb.from('soal_bank').select('id, pertanyaan, opsi, kunci, materi_id, materi!inner(tingkat)').eq('materi.tingkat', g.tingkat).order('dibuat_pada', { ascending: false })
+                sb.from('soal_bank').select('id, pertanyaan, opsi, kunci, materi_id, tp_id, level, indikator, stat_p, stat_d, stat_n, materi!inner(tingkat)').eq('materi.tingkat', g.tingkat).order('dibuat_pada', { ascending: false })
             ]);
             if (mt.error || sl.error) throw new Error((mt.error || sl.error).message);
             const materi = mt.data, soal = sl.data;
             window.cbtMateri = materi;
             if (!materi.some(m => m.id === g.materiId)) g.materiId = materi[0] ? materi[0].id : null;
             if (!materi.length) return selTingkatSem(g) + `<p style="color:var(--text-muted);">Belum ada materi Kelas ${g.tingkat}. Tambahkan di MPI → Materi &amp; TP.</p>`;
+            const tpq = await sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', materi.map(m => m.id));
+            if (tpq.error) throw new Error(tpq.error.message);
+            const P = petaTP(tpq.data);
+            window.cbtTp = P;
+            const tpOpsi = (mid, pilih) => '<option value="">Tanpa TP</option>' + (P.per[mid] || []).map(t => `<option value="${t.id}" ${t.id === pilih ? 'selected' : ''}>${P.label[t.id]} — ${esc(potong(t.deskripsi, 40))}</option>`).join('');
             const jml = (id) => soal.filter(s => s.materi_id === id).length;
             const daftar = soal.filter(s => s.materi_id === g.materiId).slice(0, 60);
             return selTingkatSem(g) + `
@@ -2056,13 +2086,17 @@
                 <div style="${kotakCbt}"><strong style="font-size:0.9rem;">➕ Tambah Soal Pilihan Ganda</strong>
                     <textarea id="sb-tanya" rows="3" placeholder="Pertanyaan. Rumus ditulis di antara tanda $, misalnya $x^2 + 2x = 8$" style="margin:8px 0;"></textarea>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">${[0, 1, 2, 3, 4].map(i => `<input id="sb-o${i}" placeholder="Opsi ${'ABCDE'[i]}${i === 4 ? ' (opsional)' : ''}">`).join('')}
-                        <select id="sb-kunci">${[0, 1, 2, 3, 4].map(i => `<option value="${i}">Kunci: ${'ABCDE'[i]}</option>`).join('')}</select></div>
+                        <select id="sb-kunci">${[0, 1, 2, 3, 4].map(i => `<option value="${i}">Kunci: ${'ABCDE'[i]}</option>`).join('')}</select>
+                        <select id="sb-level">${opsiLevel('')}</select>
+                        <select id="sb-tp" style="grid-column:1 / -1;">${tpOpsi(g.materiId, '')}</select>
+                        <input id="sb-ind" placeholder="Indikator soal (satu kalimat, untuk kisi-kisi)" style="grid-column:1 / -1;"></div>
                     <textarea id="sb-bahas" rows="2" placeholder="Pembahasan (opsional)" style="margin-top:8px;"></textarea>
                     <button class="btn-submit" style="margin-top:8px;" onclick="simpanSoal()">Simpan Soal</button></div>
                 <div style="${kotakCbt}"><strong style="font-size:0.9rem;">📗 Impor dari Excel</strong>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Kolom: Materi, Pertanyaan, A, B, C, D, E, Kunci (A–E), Pembahasan. Jika kolom Materi kosong, soal masuk ke materi yang dipilih di atas.</p>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Kolom: Materi, TP (mis. TP1), Pertanyaan, A sampai E, Kunci (A–E), Level (L1–L3), Indikator, Pembahasan. Jika kolom Materi kosong, soal masuk ke materi yang dipilih di atas.</p>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><input type="file" accept=".xlsx,.xls,.csv" onchange="imporSoalExcel(this)" style="flex:1; min-width:180px;"><button class="btn-outline" onclick="unduhTemplateSoal()">⬇️ Template</button></div></div>
-                ${daftar.length ? daftar.map((s, i) => `<div style="padding:8px 0; border-bottom:1px solid var(--browser-border); display:flex; justify-content:space-between; gap:8px;"><div style="font-size:0.85rem;"><b>${i + 1}.</b> ${esc(s.pertanyaan.length > 160 ? s.pertanyaan.slice(0, 160) + '…' : s.pertanyaan)}<br><small style="color:var(--text-muted);">${s.opsi.length} opsi • Kunci ${'ABCDE'[s.kunci]}</small></div><button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusSoal('${s.id}')">🗑️</button></div>`).join('') : '<p style="color:var(--text-muted);">Belum ada soal untuk materi ini.</p>'}`;
+                ${daftar.length ? daftar.map((s, i) => `<div style="padding:8px 0; border-bottom:1px solid var(--browser-border);"><div style="display:flex; justify-content:space-between; gap:8px;"><div style="font-size:0.85rem;"><b>${i + 1}.</b> ${esc(potong(s.pertanyaan, 160))}<br><small style="color:var(--text-muted);">${s.opsi.length} opsi • Kunci ${'ABCDE'[s.kunci]}${s.indikator ? ' • ' + esc(potong(s.indikator, 70)) : ''}${s.stat_p != null ? ' • p ' + s.stat_p + ' • D ' + s.stat_d + ' (n=' + s.stat_n + ')' : ''}</small></div><button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusSoal('${s.id}')">🗑️</button></div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><select style="flex:2; min-width:140px; font-size:0.8rem;" onchange="ubahMetaSoal('${s.id}','tp_id',this.value)">${tpOpsi(s.materi_id, s.tp_id)}</select><select style="flex:1; min-width:100px; font-size:0.8rem;" onchange="ubahMetaSoal('${s.id}','level',this.value)">${opsiLevel(s.level)}</select><button class="btn-outline" style="padding:0 8px;" data-t="${esc(s.indikator || '')}" onclick="ubahIndikator('${s.id}', this.dataset.t)">✏️ Indikator</button></div></div>`).join('') : '<p style="color:var(--text-muted);">Belum ada soal untuk materi ini.</p>'}`;
         }
         async function simpanSoal() {
             const g = window.cbtG, tanya = document.getElementById('sb-tanya').value.trim();
@@ -2073,9 +2107,20 @@
             if (!tanya) { showToast('Isi pertanyaan dahulu.', true); return; }
             if (daftar.length < 2 || daftar.some(x => !x)) { showToast('Isi minimal dua opsi berurutan tanpa celah.', true); return; }
             if (kunci >= daftar.length) { showToast('Kunci jawaban menunjuk opsi yang kosong.', true); return; }
-            const { error } = await sb.from('soal_bank').insert({ materi_id: g.materiId, pertanyaan: tanya, opsi: daftar, kunci, pembahasan: document.getElementById('sb-bahas').value.trim() || null });
-            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            const { error } = await sb.from('soal_bank').insert({ materi_id: g.materiId, tp_id: document.getElementById('sb-tp').value || null, level: document.getElementById('sb-level').value || null, indikator: document.getElementById('sb-ind').value.trim() || null, pertanyaan: tanya, opsi: daftar, kunci, pembahasan: document.getElementById('sb-bahas').value.trim() || null });
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_12.sql)', true); return; }
             showToast('Soal disimpan.');
+            renderContent('nilai');
+        }
+        async function ubahMetaSoal(id, kolom, val) {
+            const { error } = await sb.from('soal_bank').update({ [kolom]: val || null }).eq('id', id);
+            showToast(error ? 'Gagal: ' + error.message + ' (jalankan supabase_patch_12.sql)' : 'Tersimpan.', !!error);
+        }
+        async function ubahIndikator(id, lama) {
+            const baru = prompt('Indikator soal (satu kalimat):', lama || '');
+            if (baru === null) return;
+            const { error } = await sb.from('soal_bank').update({ indikator: baru.trim() || null }).eq('id', id);
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
             renderContent('nilai');
         }
         async function hapusSoal(id) {
@@ -2087,8 +2132,10 @@
         function unduhTemplateSoal() {
             if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
             const m = (window.cbtMateri && window.cbtMateri[0] && window.cbtMateri[0].nama) || 'Eksponen';
-            const ws = XLSX.utils.aoa_to_sheet([['Materi', 'Pertanyaan', 'A', 'B', 'C', 'D', 'E', 'Kunci', 'Pembahasan'], [m, 'Hasil dari $2^3 \\times 2^2$ adalah ...', '16', '32', '64', '128', '', 'B', 'Dikalikan: $2^{3+2} = 2^5 = 32$.'], [m, 'Bentuk sederhana $\\dfrac{a^5}{a^2}$ adalah ...', '$a^2$', '$a^3$', '$a^7$', '$a^{10}$', '', 'B', '']]);
-            ws['!cols'] = [{ wch: 28 }, { wch: 50 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 36 }];
+            const ws = XLSX.utils.aoa_to_sheet([['Materi', 'TP', 'Pertanyaan', 'A', 'B', 'C', 'D', 'E', 'Kunci', 'Level', 'Indikator', 'Pembahasan'],
+                [m, 'TP1', 'Hasil dari $2^3 \\times 2^2$ adalah ...', '16', '32', '64', '128', '', 'B', 'L1', 'Menentukan hasil perkalian bilangan berpangkat', 'Dikalikan: $2^{3+2} = 2^5 = 32$.'],
+                [m, 'TP2', 'Bentuk sederhana $\\dfrac{a^5}{a^2}$ adalah ...', '$a^2$', '$a^3$', '$a^7$', '$a^{10}$', '', 'B', 'L2', 'Menyederhanakan pembagian bilangan berpangkat', '']]);
+            ws['!cols'] = [{ wch: 26 }, { wch: 7 }, { wch: 46 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 7 }, { wch: 7 }, { wch: 40 }, { wch: 34 }];
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Soal');
             XLSX.writeFile(wb, 'template_bank_soal.xlsx');
         }
@@ -2096,7 +2143,7 @@
             const f = input.files[0];
             if (!f) return;
             if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
-            const g = window.cbtG, materi = window.cbtMateri || [];
+            const g = window.cbtG, materi = window.cbtMateri || [], P = window.cbtTp || { per: {} };
             const rd = new FileReader();
             rd.onload = async (e) => {
                 try {
@@ -2108,21 +2155,23 @@
                     const peta = {}; materi.forEach(m => { peta[m.nama.trim().toLowerCase()] = m.id; });
                     const rows = []; let lewat = 0;
                     baris.slice(h + 1).forEach(r => {
-                        const tanya = String(r[kol.pertanyaan] ?? '').trim();
+                        const sel = (k) => kol[k] === undefined ? '' : String(r[kol[k]] ?? '').trim();
+                        const tanya = sel('pertanyaan');
                         if (!tanya) return;
-                        const nm = kol.materi !== undefined ? String(r[kol.materi] ?? '').trim().toLowerCase() : '';
-                        const mid = nm ? peta[nm] : g.materiId;
-                        const opsi = ['a', 'b', 'c', 'd', 'e'].map(x => String(r[kol[x]] ?? '').trim());
+                        const nm = sel('materi').toLowerCase(), mid = nm ? peta[nm] : g.materiId;
+                        const opsi = ['a', 'b', 'c', 'd', 'e'].map(sel);
                         let n = opsi.length; while (n > 0 && !opsi[n - 1]) n--;
-                        const daftar = opsi.slice(0, n), kc = String(r[kol.kunci] ?? '').trim().toUpperCase();
+                        const daftar = opsi.slice(0, n), kc = sel('kunci').toUpperCase();
                         const kunci = /^[A-E]$/.test(kc) ? 'ABCDE'.indexOf(kc) : (/^[1-5]$/.test(kc) ? Number(kc) - 1 : -1);
                         if (!mid || daftar.length < 2 || daftar.some(x => !x) || kunci < 0 || kunci >= daftar.length) { lewat++; return; }
-                        rows.push({ materi_id: mid, pertanyaan: tanya, opsi: daftar, kunci, pembahasan: kol.pembahasan !== undefined ? (String(r[kol.pembahasan] ?? '').trim() || null) : null });
+                        const tpNo = parseInt(sel('tp').replace(/\D/g, ''), 10), tp = (P.per[mid] || [])[tpNo - 1];
+                        const lv = sel('level').toUpperCase().replace(/^([123])$/, 'L$1');
+                        rows.push({ materi_id: mid, tp_id: tp ? tp.id : null, level: LEVEL[lv] ? lv : null, indikator: sel('indikator') || null, pertanyaan: tanya, opsi: daftar, kunci, pembahasan: sel('pembahasan') || null });
                     });
                     if (!rows.length) { showToast('Tidak ada soal valid. Periksa nama materi, opsi, dan kunci.', true); return; }
                     for (let i = 0; i < rows.length; i += 100) {
                         const { error } = await sb.from('soal_bank').insert(rows.slice(i, i + 100));
-                        if (error) { showToast('Gagal: ' + error.message, true); return; }
+                        if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_12.sql)', true); return; }
                     }
                     showToast(rows.length + ' soal diimpor' + (lewat ? ', ' + lewat + ' baris dilewati.' : '.'));
                     renderContent('nilai');
@@ -2133,45 +2182,56 @@
 
         // --- Tes ---
         async function htmlCbtTes(g) {
-            const [tes, mt, sl, kl] = await Promise.all([
+            const [tes, mt, kl] = await Promise.all([
                 sb.from('cbt_tes').select('id, kode, judul, jenis, tingkat, semester, durasi_menit, status, cbt_tes_soal(count)').order('dibuat_pada', { ascending: false }),
                 sb.from('materi').select('id, nama').eq('tingkat', g.tingkat).eq('semester', g.semester).order('urutan'),
-                sb.from('soal_bank').select('materi_id, materi!inner(tingkat)').eq('materi.tingkat', g.tingkat),
                 sb.from('kelas').select('id, nama').order('nama')
             ]);
-            const gagal = tes.error || mt.error || sl.error || kl.error;
+            const gagal = tes.error || mt.error || kl.error;
             if (gagal) throw new Error(gagal.message);
-            window.cbtMateriSem = mt.data;
-            const tersedia = (id) => sl.data.filter(s => s.materi_id === id).length;
+            const mids = mt.data.map(m => m.id);
+            const [tpq, sl] = mids.length ? await Promise.all([
+                sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', mids),
+                sb.from('soal_bank').select('id, materi_id, tp_id').in('materi_id', mids)
+            ]) : [{ data: [] }, { data: [] }];
+            if (tpq.error || sl.error) throw new Error((tpq.error || sl.error).message);
+            const P = petaTP(tpq.data);
+            window.cbtMateriSem = mt.data; window.cbtTpSem = P;
+            const hitung = (mid, tp) => sl.data.filter(s => s.materi_id === mid && (tp === '' ? !s.tp_id : s.tp_id === tp)).length;
             const warna = { draft: '#6b7280', buka: '#16a34a', tutup: '#b91c1c' };
             const daftar = tes.data.map(t => `<div style="${kotakCbt}"><div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;"><div><strong>${esc(t.judul)}</strong><br><small style="color:var(--text-muted);">${esc(t.jenis)} • Kelas ${t.tingkat} • Sem. ${t.semester} • ${t.durasi_menit} menit • ${(t.cbt_tes_soal && t.cbt_tes_soal[0] ? t.cbt_tes_soal[0].count : 0)} soal</small></div><div style="text-align:right;"><div style="font-size:1.3rem; font-weight:800; letter-spacing:4px;">${esc(t.kode)}</div><small style="color:${warna[t.status]}; font-weight:700;">${t.status.toUpperCase()}</small></div></div>
-                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">${t.status === 'buka' ? `<button class="btn-outline" onclick="ubahStatusTes('${t.id}','tutup')">⏹ Tutup</button>` : `<button class="btn-outline" onclick="ubahStatusTes('${t.id}','buka')">▶ Buka</button>`}<button class="btn-outline" onclick="window.cbtG.tesId='${t.id}'; ubahCbt('tab','hasil')">📊 Hasil</button><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusTes('${t.id}')">🗑️</button></div></div>`).join('') || '<p style="color:var(--text-muted);">Belum ada tes.</p>';
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">${t.status === 'buka' ? `<button class="btn-outline" onclick="ubahStatusTes('${t.id}','tutup')">⏹ Tutup</button>` : `<button class="btn-outline" onclick="ubahStatusTes('${t.id}','buka')">▶ Buka</button>`}<button class="btn-outline" onclick="bukaKisiKisi('${t.id}')">📑 Kisi-kisi</button><button class="btn-outline" onclick="bukaKartuSoal('${t.id}', false)">🗂️ Kartu Soal</button><button class="btn-outline" onclick="window.cbtG.tesId='${t.id}'; ubahCbt('tab','analisis')">🔬 Analisis</button><button class="btn-outline" onclick="window.cbtG.tesId='${t.id}'; ubahCbt('tab','hasil')">📊 Hasil</button><button class="btn-outline" style="color:#b91c1c; border-color:#b91c1c;" onclick="hapusTes('${t.id}')">🗑️</button></div></div>`).join('') || '<p style="color:var(--text-muted);">Belum ada tes.</p>';
             const kelasTingkat = kl.data.filter(k => tingkatDari(k.nama) === g.tingkat);
+            const baris = (m, label, tp, ada) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 0; font-size:0.82rem;"><span>${label} <small style="color:var(--text-muted);">(tersedia ${ada})</small></span><input type="number" min="0" max="${ada}" value="0" class="ts-kuota" data-m="${m.id}" data-tp="${tp}" style="width:76px;"></div>`;
+            const kuotaHtml = mt.data.map(m => `<div style="margin-bottom:8px;"><b style="font-size:0.85rem;">${esc(m.nama)}</b>${(P.per[m.id] || []).map(t => baris(m, `${P.label[t.id]} — ${esc(potong(t.deskripsi, 48))}`, t.id, hitung(m.id, t.id))).join('')}${baris(m, 'Umum / tanpa TP', '', hitung(m.id, ''))}</div>`).join('') || '<p style="color:var(--text-muted); font-size:0.85rem;">Belum ada materi pada semester ini.</p>';
             const form = `<div style="${kotakCbt}"><strong style="font-size:0.9rem;">➕ Buat Tes Baru — Kelas ${g.tingkat}, Semester ${g.semester}</strong>
                 <input id="ts-judul" placeholder="Judul tes, mis. SAS Matematika Kelas ${g.tingkat}" style="margin:8px 0;">
                 <div style="display:flex; gap:8px; flex-wrap:wrap;"><select id="ts-jenis" style="flex:2; min-width:160px;"><option>Sumatif Lintas Materi</option><option>Sumatif Akhir Semester</option></select><input id="ts-durasi" type="number" min="5" max="300" value="60" style="flex:1; min-width:90px;" title="Durasi (menit)"></div>
                 <p style="font-size:0.8rem; margin:10px 0 4px;"><b>Kelas peserta</b></p><div style="display:flex; gap:12px; flex-wrap:wrap; font-size:0.85rem;">${kelasTingkat.map(k => `<label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" class="ts-kelas" value="${k.id}" checked style="width:auto;">${esc(k.nama)}</label>`).join('') || '<span style="color:var(--text-muted);">Tidak ada kelas dengan awalan ' + g.tingkat + '.</span>'}</div>
-                <p style="font-size:0.8rem; margin:10px 0 4px;"><b>Jumlah soal per materi</b> (diambil acak dari bank soal)</p>
-                ${mt.data.map(m => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 0; font-size:0.85rem;"><span>${esc(m.nama)} <small style="color:var(--text-muted);">(tersedia ${tersedia(m.id)})</small></span><input type="number" min="0" max="${tersedia(m.id)}" value="0" class="ts-kuota" data-m="${m.id}" style="width:80px;"></div>`).join('') || '<p style="color:var(--text-muted); font-size:0.85rem;">Belum ada materi pada semester ini.</p>'}
-                <div style="display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; font-size:0.85rem;"><label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" id="ts-acak" checked style="width:auto;"> Acak urutan soal</label><label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" id="ts-skor" style="width:auto;"> Tampilkan skor ke siswa</label></div>
+                <p style="font-size:0.8rem; margin:10px 0 4px;"><b>Jumlah soal per TP</b> (diambil acak dari bank soal; nomor soal disusun menurut materi lalu TP)</p>
+                ${kuotaHtml}
+                <div style="display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; font-size:0.85rem;"><label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" id="ts-acak" checked style="width:auto;"> Acak urutan soal di layar siswa</label><label style="display:flex; align-items:center; gap:4px;"><input type="checkbox" id="ts-skor" style="width:auto;"> Tampilkan skor ke siswa</label></div>
                 <button class="btn-submit" onclick="buatTes()">Buat Tes</button></div>`;
             return selTingkatSem(g) + form + '<h3 style="color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;">Daftar Tes</h3>' + daftar;
         }
         const kodeAcak = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
         async function buatTes() {
-            const g = window.cbtG, judul = document.getElementById('ts-judul').value.trim(), durasi = parseInt(document.getElementById('ts-durasi').value, 10);
+            const g = window.cbtG, P = window.cbtTpSem || { per: {}, label: {} }, judul = document.getElementById('ts-judul').value.trim(), durasi = parseInt(document.getElementById('ts-durasi').value, 10);
             const kelasIds = Array.from(document.querySelectorAll('.ts-kelas:checked')).map(c => c.value);
-            const kuota = Array.from(document.querySelectorAll('.ts-kuota')).map(i => ({ id: i.dataset.m, n: parseInt(i.value, 10) || 0 })).filter(k => k.n > 0);
+            const aktif = Array.from(document.querySelectorAll('.ts-kuota')).map(i => ({ m: i.dataset.m, tp: i.dataset.tp, n: parseInt(i.value, 10) || 0 })).filter(k => k.n > 0);
             if (!judul) { showToast('Isi judul tes dahulu.', true); return; }
             if (!(durasi >= 5 && durasi <= 300)) { showToast('Durasi harus 5 sampai 300 menit.', true); return; }
             if (!kelasIds.length) { showToast('Pilih minimal satu kelas peserta.', true); return; }
-            if (!kuota.length) { showToast('Isi jumlah soal minimal pada satu materi.', true); return; }
-            const bank = await sb.from('soal_bank').select('id, materi_id').in('materi_id', kuota.map(k => k.id));
+            if (!aktif.length) { showToast('Isi jumlah soal minimal pada satu TP.', true); return; }
+            const materiAktif = [...new Set(aktif.map(k => k.m))], belum = [];
+            materiAktif.forEach(mid => (P.per[mid] || []).forEach(t => { if (!aktif.some(k => k.m === mid && k.tp === t.id)) belum.push(P.label[t.id] + ' (' + ((window.cbtMateriSem.find(m => m.id === mid) || {}).nama || '') + ')'); }));
+            if (belum.length && !confirm('TP berikut belum terwakili soal: ' + belum.join(', ') + '.\nLanjutkan membuat tes?')) return;
+            const bank = await sb.from('soal_bank').select('id, materi_id, tp_id').in('materi_id', materiAktif);
             if (bank.error) { showToast('Gagal: ' + bank.error.message, true); return; }
             const pilih = [];
-            for (const k of kuota) {
-                const pool = bank.data.filter(s => s.materi_id === k.id).map(s => s.id);
-                if (pool.length < k.n) { const nm = (window.cbtMateriSem.find(m => m.id === k.id) || {}).nama; showToast('Soal "' + nm + '" hanya tersedia ' + pool.length + ', kurang dari ' + k.n + '.', true); return; }
+            for (const k of aktif) {
+                const pool = bank.data.filter(s => s.materi_id === k.m && (k.tp === '' ? !s.tp_id : s.tp_id === k.tp)).map(s => s.id);
+                if (pool.length < k.n) { showToast('Soal untuk ' + (k.tp ? P.label[k.tp] : 'Umum') + ' pada salah satu materi hanya tersedia ' + pool.length + ', kurang dari ' + k.n + '.', true); return; }
                 for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
                 pool.slice(0, k.n).forEach(id => pilih.push(id));
             }
@@ -2197,6 +2257,158 @@
             const { error } = await sb.from('cbt_tes').delete().eq('id', id);
             if (error) { showToast('Gagal: ' + error.message, true); return; }
             renderContent('nilai');
+        }
+
+        // --- Kisi-kisi & kartu soal ---
+        const LOGO_EDU = '<svg viewBox="0 0 64 64"><defs><radialGradient id="lgq" cx="0.35" cy="0.3" r="0.8"><stop offset="0" stop-color="#93c5fd"/><stop offset="0.55" stop-color="#6366f1"/><stop offset="1" stop-color="#5b21b6"/></radialGradient></defs><g transform="rotate(-20 32 32)"><path d="M4 32A28 9 0 0 1 60 32" fill="none" stroke="#f9a826" stroke-width="3.5" stroke-linecap="round"/><circle cx="32" cy="32" r="15" fill="url(#lgq)"/><path d="M4 32A28 9 0 0 0 60 32" fill="none" stroke="#f9a826" stroke-width="3.5" stroke-linecap="round"/></g></svg>';
+        const CSS_DOK = '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:12px;color:#1e1b4b;font-size:12px}.noprint{margin-bottom:10px}.kop{display:flex;align-items:center;gap:14px;padding:10px 16px;border-radius:12px;background:linear-gradient(120deg,#1e3a8a,#6d28d9 62%,#f59e0b);color:#fff}.kop svg{width:46px;height:46px}.kop h1{margin:0;font-size:22px;letter-spacing:5px}.kop p{margin:2px 0 0;font-size:10px;letter-spacing:2px;text-transform:uppercase;opacity:.9}.kop .kanan{margin-left:auto;text-align:right}.kop .kanan b{font-size:14px}h2{text-align:center;font-size:15px;margin:12px 0 2px}.sub{text-align:center;color:#4338ca;margin-bottom:8px}table{width:100%;border-collapse:collapse;margin:6px 0}th,td{border:1.3px solid #312e81;padding:4px 6px;text-align:center;vertical-align:top}th{background:#eef2ff}td.l{text-align:left}.kartu{break-inside:avoid;margin-bottom:10px}.kartu td.k{width:17%;background:#eef2ff;font-weight:600;text-align:left}.kartu td{text-align:left}.kartu .judul{background:linear-gradient(120deg,#1e3a8a,#6d28d9);color:#fff;text-align:center;font-weight:700}.pk{font-size:10px;color:#4338ca}@media print{.noprint{display:none}}';
+        const kopDok = (sub) => `<div class="kop">${LOGO_EDU}<div><h1>EDUVERSE</h1><p>Ekosistem Belajar Terpadu</p></div><div class="kanan"><b>${esc(NAMA_SEKOLAH)}</b><p>${esc(sub)}</p></div></div>`;
+        function bukaDokumen(html) {
+            const w = window.open('', '_blank');
+            if (!w) { showToast('Pop-up diblokir browser. Izinkan pop-up untuk situs ini.', true); return; }
+            w.document.write(html); w.document.close();
+        }
+        async function muatSoalTes(tesId) {
+            const [ts, it, kk] = await Promise.all([
+                sb.from('cbt_tes').select('id, judul, jenis, tingkat, semester, durasi_menit').eq('id', tesId).single(),
+                sb.from('cbt_tes_soal').select('urutan, soal_bank(id, pertanyaan, opsi, kunci, bobot, pembahasan, level, indikator, tp_id, materi_id, stat_p, stat_d, materi(nama, elemen))').eq('tes_id', tesId).order('urutan'),
+                sb.from('cbt_tes_kelas').select('kelas(nama)').eq('tes_id', tesId)
+            ]);
+            if (ts.error || it.error || kk.error) throw new Error((ts.error || it.error || kk.error).message);
+            const items = it.data.filter(r => r.soal_bank).map((r, i) => ({ no: i + 1, ...r.soal_bank }));
+            const mids = [...new Set(items.map(x => x.materi_id))];
+            const tpq = mids.length ? await sb.from('tp').select('id, materi_id, urutan, deskripsi').in('materi_id', mids) : { data: [] };
+            const P = petaTP(tpq.data);
+            const kelas = kk.data.map(k => k.kelas && k.kelas.nama).filter(Boolean).sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
+            return { tes: ts.data, items, P, kelas, mids };
+        }
+        const faseDari = (tk) => (SEBARAN[tk] || {}).fase || '-';
+        const teksTP = (D, x) => { if (!x.tp_id) return '-'; const t = (D.P.per[x.materi_id] || []).find(q => q.id === x.tp_id); return t ? D.P.label[t.id] + ' — ' + t.deskripsi : '-'; };
+        function htmlKisiKisi(D) {
+            const T = D.tes, lv = ['L1', 'L2', 'L3', ''];
+            const baris = D.items.map(x => `<tr><td>${x.no}</td><td class="l">${esc(x.materi ? x.materi.elemen || '-' : '-')}</td><td class="l">${esc(x.materi ? x.materi.nama : '-')}</td><td class="l">${esc(teksTP(D, x))}</td><td class="l">${esc(x.indikator || '-')}</td><td>${x.level ? x.level + ' ' + LEVEL[x.level] : '-'}</td><td>Pilihan Ganda</td></tr>`).join('');
+            const nm = (id) => (D.items.find(x => x.materi_id === id) || {}).materi;
+            const mat = D.mids.map(id => { const arr = D.items.filter(x => x.materi_id === id); return `<tr><td class="l">${esc(nm(id) ? nm(id).nama : '')}</td>${lv.map(l => `<td>${arr.filter(x => (x.level || '') === l).length}</td>`).join('')}<td><b>${arr.length}</b></td></tr>`; }).join('');
+            const tpCov = D.mids.map(id => (D.P.per[id] || []).map(t => { const n = D.items.filter(x => x.tp_id === t.id).length; return `<tr><td class="l">${esc(nm(id) ? nm(id).nama : '')}</td><td class="l">${D.P.label[t.id]} — ${esc(t.deskripsi)}</td><td>${n}</td><td>${n === 0 ? '⚠ belum terwakili' : (n === 1 ? 'hanya 1 soal' : 'terwakili')}</td></tr>`; }).join('')).join('');
+            return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Kisi-kisi ${esc(T.judul)}</title><style>@page{size:A4 landscape;margin:9mm}${CSS_DOK}</style></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>${kopDok('Kisi-kisi Soal')}
+                <h2>KISI-KISI ${esc(T.judul.toUpperCase())}</h2><div class="sub">Matematika • Kelas ${T.tingkat} (Fase ${faseDari(T.tingkat)}) • Semester ${T.semester} • ${esc(T.jenis)} • ${D.items.length} soal Pilihan Ganda • ${T.durasi_menit} menit • Peserta: ${esc(D.kelas.join(', '))}</div>
+                <table><tr><th style="width:5%">No. Soal</th><th style="width:13%">Elemen</th><th style="width:15%">Materi</th><th style="width:25%">Tujuan Pembelajaran</th><th>Indikator Soal</th><th style="width:11%">Level Kognitif</th><th style="width:9%">Bentuk Soal</th></tr>${baris}</table>
+                <p><b>Sebaran soal per materi dan level kognitif</b></p>
+                <table style="width:70%"><tr><th>Materi</th><th>L1 Pemahaman</th><th>L2 Aplikasi</th><th>L3 Penalaran</th><th>Belum ditandai</th><th>Jumlah</th></tr>${mat}</table>
+                <p><b>Keterwakilan TP</b></p><table style="width:85%"><tr><th>Materi</th><th>TP</th><th>Jumlah Soal</th><th>Keterangan</th></tr>${tpCov}</table>
+                <p class="pk">Dihasilkan oleh EDUVERSE • ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p></body></html>`;
+        }
+        function htmlKartuSoal(D, A) {
+            const T = D.tes, huruf = 'ABCDE';
+            const kartu = D.items.map(x => {
+                const b = A ? A.butir.find(q => q.id === x.id) : null;
+                const analisis = b ? `<tr><td class="k">Hasil Analisis</td><td colspan="3">Tingkat kesukaran (p) ${b.p.toFixed(2)} — ${b.kat} • Daya pembeda (D) ${b.D.toFixed(2)} — ${b.katD} • Peserta ${A.n} • <b>Rekomendasi: ${b.rek}</b></td></tr>` : '';
+                return `<div class="kartu"><table><tr><td class="judul" colspan="4">KARTU SOAL No. ${x.no}</td></tr>
+                    <tr><td class="k">Mata Pelajaran</td><td>Matematika</td><td class="k">Kelas / Fase</td><td>${T.tingkat} / ${faseDari(T.tingkat)} • Semester ${T.semester}</td></tr>
+                    <tr><td class="k">Elemen</td><td colspan="3">${esc(x.materi ? x.materi.elemen || '-' : '-')}</td></tr>
+                    <tr><td class="k">Materi</td><td colspan="3">${esc(x.materi ? x.materi.nama : '-')}</td></tr>
+                    <tr><td class="k">Tujuan Pembelajaran</td><td colspan="3">${esc(teksTP(D, x))}</td></tr>
+                    <tr><td class="k">Indikator Soal</td><td colspan="3">${esc(x.indikator || '-')}</td></tr>
+                    <tr><td class="k">Level Kognitif</td><td>${x.level ? x.level + ' ' + LEVEL[x.level] : '-'}</td><td class="k">Bentuk Soal</td><td>Pilihan Ganda</td></tr>
+                    <tr><td class="k">Soal</td><td colspan="3">${esc(x.pertanyaan).replace(/\n/g, '<br>')}<br>${x.opsi.map((o, i) => `<div>${huruf[i]}. ${esc(o)}</div>`).join('')}</td></tr>
+                    <tr><td class="k">Kunci Jawaban</td><td><b>${huruf[x.kunci]}</b></td><td class="k">Pembahasan</td><td>${esc(x.pembahasan || '-').replace(/\n/g, '<br>')}</td></tr>${analisis}</table></div>`;
+            }).join('');
+            return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Kartu Soal ${esc(T.judul)}</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"><style>@page{size:A4 portrait;margin:10mm}${CSS_DOK}</style>
+                <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"><\/script><script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"><\/script>
+                <script>window.addEventListener('load', function () { if (window.renderMathInElement) renderMathInElement(document.body, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false }); });<\/script></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button> <small>Rumus dimuat dari internet; tunggu sebentar sebelum mencetak.</small></div>${kopDok('Kartu Soal')}
+                <h2>KARTU SOAL — ${esc(T.judul.toUpperCase())}</h2><div class="sub">${esc(T.jenis)} • ${D.items.length} soal</div>${kartu}
+                <p class="pk">Dihasilkan oleh EDUVERSE • ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p></body></html>`;
+        }
+        async function bukaKisiKisi(tesId) {
+            try { const D = await muatSoalTes(tesId); if (!D.items.length) { showToast('Tes ini belum memiliki soal.', true); return; } bukaDokumen(htmlKisiKisi(D)); }
+            catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_patch_12.sql)', true); }
+        }
+        async function bukaKartuSoal(tesId, denganAnalisis) {
+            try {
+                let D, A = null;
+                if (denganAnalisis) { const r = await muatAnalisis(tesId); D = r.D; A = r.A.n ? r.A : null; } else D = await muatSoalTes(tesId);
+                if (!D.items.length) { showToast('Tes ini belum memiliki soal.', true); return; }
+                bukaDokumen(htmlKartuSoal(D, A));
+            } catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_patch_12.sql)', true); }
+        }
+
+        // --- Analisis butir soal ---
+        function hitungAnalisis(items, sesi) {
+            const n = sesi.length, k = items.length;
+            if (!n || !k) return { n, k, butir: [], tp: [], materi: [], rata: null, sd: null, kr20: null, ringkas: { Pakai: 0, Revisi: 0, Ganti: 0 } };
+            const benar = (s, it) => s.jaw[it.id] === it.kunci ? 1 : 0;
+            const total = sesi.map(s => items.reduce((a, it) => a + benar(s, it), 0));
+            const urut = sesi.map((s, i) => ({ s, t: total[i] })).sort((a, b) => b.t - a.t || String(a.s.id).localeCompare(String(b.s.id)));
+            const gsz = Math.max(1, Math.round(0.27 * n)), atas = urut.slice(0, gsz), bawah = urut.slice(n - gsz);
+            const butir = items.map(it => {
+                const jml = (arr) => arr.reduce((a, x) => a + benar(x.s || x, it), 0);
+                const p = jml(sesi) / n, D = (jml(atas) - jml(bawah)) / gsz;
+                const pilih = Array.from({ length: it.nOpsi }, () => 0); let kosong = 0;
+                sesi.forEach(s => { const v = s.jaw[it.id]; if (v === undefined || v === null || v >= it.nOpsi) kosong++; else pilih[v]++; });
+                const lemah = pilih.map((c, i) => (i !== it.kunci && c / n < 0.05) ? i : -1).filter(i => i >= 0);
+                const kat = p < 0.30 ? 'Sukar' : p <= 0.70 ? 'Sedang' : 'Mudah';
+                const katD = D >= 0.40 ? 'Sangat baik' : D >= 0.30 ? 'Baik' : D >= 0.20 ? 'Cukup' : 'Buruk';
+                const rek = D < 0.10 ? 'Ganti' : (p < 0.20 || p > 0.90 || D < 0.30 || lemah.length) ? 'Revisi' : 'Pakai';
+                return { ...it, p, D, kat, katD, pilih, kosong, lemah, rek };
+            });
+            const rata = total.reduce((a, b) => a + b, 0) / n, varT = total.reduce((a, t) => a + (t - rata) ** 2, 0) / n;
+            const kr20 = (k > 1 && varT > 0) ? (k / (k - 1)) * (1 - butir.reduce((a, b) => a + b.p * (1 - b.p), 0) / varT) : null;
+            const kel = (kunci) => { const m = {}; butir.forEach(b => { const id = b[kunci]; if (id) (m[id] = m[id] || []).push(b); }); return Object.keys(m).map(id => ({ id, jml: m[id].length, p: m[id].reduce((a, b) => a + b.p, 0) / m[id].length })); };
+            const ringkas = { Pakai: 0, Revisi: 0, Ganti: 0 }; butir.forEach(b => { ringkas[b.rek]++; });
+            return { n, k, butir, tp: kel('tpId'), materi: kel('materiId'), rata, sd: Math.sqrt(varT), kr20, ringkas };
+        }
+        async function muatAnalisis(tesId) {
+            const D = await muatSoalTes(tesId);
+            const ss = await sb.from('cbt_sesi').select('id').eq('tes_id', tesId).eq('status', 'selesai');
+            if (ss.error) throw new Error(ss.error.message);
+            const jw = await ambilSemua(() => sb.from('cbt_jawaban').select('sesi_id, soal_id, pilihan, cbt_sesi!inner(tes_id, status)').eq('cbt_sesi.tes_id', tesId).eq('cbt_sesi.status', 'selesai').order('sesi_id').order('soal_id'));
+            const sesi = ss.data.map(s => ({ id: s.id, jaw: {} })), idx = {};
+            sesi.forEach(s => { idx[s.id] = s; });
+            jw.forEach(r => { if (idx[r.sesi_id]) idx[r.sesi_id].jaw[r.soal_id] = r.pilihan; });
+            const items = D.items.map(x => ({ id: x.id, no: x.no, kunci: x.kunci, nOpsi: x.opsi.length, tpId: x.tp_id, materiId: x.materi_id, level: x.level, materi: x.materi ? x.materi.nama : '' }));
+            return { D, A: hitungAnalisis(items, sesi) };
+        }
+        async function htmlCbtAnalisis(g) {
+            const ts = await sb.from('cbt_tes').select('id, judul, kode').order('dibuat_pada', { ascending: false });
+            if (ts.error) throw new Error(ts.error.message);
+            if (!ts.data.length) return '<p style="color:var(--text-muted);">Belum ada tes.</p>';
+            if (!ts.data.some(t => t.id === g.tesId)) g.tesId = ts.data[0].id;
+            const pilihTes = `<select onchange="ubahCbt('tesId', this.value)" style="margin-bottom:12px;">${ts.data.map(t => `<option value="${t.id}" ${t.id === g.tesId ? 'selected' : ''}>${esc(t.judul)} (${esc(t.kode)})</option>`).join('')}</select>`;
+            await sb.rpc('cbt_tutup_sesi', { p_tes: g.tesId, p_semua: false });
+            const { D, A } = await muatAnalisis(g.tesId);
+            window.cbtAnalisis = { D, A };
+            if (!A.n) return pilihTes + '<p style="color:var(--text-muted);">Belum ada siswa yang menyelesaikan tes ini, sehingga belum ada yang dapat dianalisis.</p>';
+            const kr = A.kr20 == null ? '-' : A.kr20.toFixed(2), krKet = A.kr20 == null ? '' : (A.kr20 >= 0.70 ? 'layak' : (A.kr20 >= 0.50 ? 'cukup, gunakan hati-hati' : 'rendah'));
+            const kartu = (judul, isi, ket) => `<div style="flex:1; min-width:130px; padding:10px; border:1px solid var(--browser-border); border-radius:8px; background:var(--card-bg); text-align:center;"><div style="font-size:0.72rem; color:var(--text-muted);">${judul}</div><div style="font-size:1.3rem; font-weight:800;">${isi}</div><div style="font-size:0.72rem; color:var(--text-muted);">${ket || ''}</div></div>`;
+            const baris = A.butir.map(b => `<tr><td>${b.no}</td><td style="text-align:left;">${esc(potong(b.materi, 22))}</td><td>${b.tpId ? D.P.label[b.tpId] : '-'}</td><td>${b.level || '-'}</td><td>${b.p.toFixed(2)}<br><small>${b.kat}</small></td><td>${b.D.toFixed(2)}<br><small>${b.katD}</small></td><td style="text-align:left; white-space:nowrap; font-size:0.72rem;">${b.pilih.map((c, i) => `${'ABCDE'[i]}${i === b.kunci ? '✔' : ''} ${Math.round(100 * c / A.n)}%${b.lemah.includes(i) ? '⚠' : ''}`).join(' · ')}${b.kosong ? ' · kosong ' + Math.round(100 * b.kosong / A.n) + '%' : ''}</td><td><span class="rek-chip rek-${b.rek}">${b.rek}</span></td></tr>`).join('');
+            const tpBaris = A.tp.map(t => { const lab = D.P.label[t.id], ds = (D.items.find(x => x.tp_id === t.id) || {}); return `<tr><td>${lab}</td><td style="text-align:left;">${esc(potong(teksTP(D, ds), 90))}</td><td>${t.jml}</td><td>${Math.round(t.p * 100)}%</td><td>${t.jml < 2 ? 'sampel kecil (< 2 soal)' : (t.p < 0.60 ? 'perlu perhatian' : 'baik')}</td></tr>`; }).join('');
+            return pilihTes + `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">${kartu('Peserta', A.n, A.n < 30 ? 'kurang dari 30: indikatif' : '')}${kartu('Rata-rata benar', fn1(A.rata) + '/' + A.k, fn1(A.rata / A.k * 100) + '%')}${kartu('KR-20', kr, krKet)}${kartu('Pakai / Revisi / Ganti', A.ringkas.Pakai + ' / ' + A.ringkas.Revisi + ' / ' + A.ringkas.Ganti, '')}</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><button class="btn-outline" onclick="simpanStatistik()">💾 Simpan Statistik ke Bank Soal</button><button class="btn-outline" onclick="bukaKartuSoal('${g.tesId}', true)">🗂️ Kartu Soal + Analisis</button><button class="btn-outline" onclick="unduhAnalisis()">⬇️ Excel</button></div>
+                <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Materi</th><th>TP</th><th>Level</th><th>Kesukaran (p)</th><th>Daya Pembeda (D)</th><th>Sebaran Jawaban (⚠ &lt; 5%)</th><th>Rekomendasi</th></tr>${baris}</table></div>
+                <h3 style="color:var(--color-dark-blue); font-size:1rem; margin:16px 0 8px;">Ketercapaian per TP</h3>
+                <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>TP</th><th>Rumusan</th><th>Jml Soal</th><th>Rata-rata Benar</th><th>Catatan</th></tr>${tpBaris || '<tr><td colspan="5">Soal belum ditautkan ke TP.</td></tr>'}</table></div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Pakai: p 0,20–0,90, D ≥ 0,30, semua pengecoh berfungsi. Revisi: p ekstrem, D 0,10–0,29, atau ada pengecoh yang dipilih &lt; 5% siswa. Ganti: D &lt; 0,10 (D negatif berarti kunci perlu dicek). Daya pembeda memakai 27% peserta teratas dan terbawah. Batas-batas ini adalah kebiasaan umum dan bukan ketentuan resmi.</p>`;
+        }
+        async function simpanStatistik() {
+            const { A } = window.cbtAnalisis, waktu = new Date().toISOString();
+            if (A.n < 10 && !confirm('Peserta hanya ' + A.n + '. Statistik dari sedikit peserta kurang andal. Tetap simpan?')) return;
+            for (let i = 0; i < A.butir.length; i += 10) {
+                const hasil = await Promise.all(A.butir.slice(i, i + 10).map(b => sb.from('soal_bank').update({ stat_p: Math.round(b.p * 100) / 100, stat_d: Math.round(b.D * 100) / 100, stat_n: A.n, stat_pada: waktu }).eq('id', b.id)));
+                const gagal = hasil.find(r => r.error);
+                if (gagal) { showToast('Gagal: ' + gagal.error.message + ' (jalankan supabase_patch_12.sql)', true); return; }
+            }
+            showToast('Statistik ' + A.butir.length + ' soal disimpan di bank soal.');
+        }
+        function unduhAnalisis() {
+            if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
+            const { D, A } = window.cbtAnalisis, r2 = (v) => Math.round(v * 100) / 100;
+            const aoa = [['Analisis butir soal: ' + D.tes.judul], ['Peserta', A.n, 'KR-20', A.kr20 == null ? '' : r2(A.kr20)], [], ['No', 'Materi', 'TP', 'Level', 'p', 'Kategori p', 'D', 'Kategori D', ...Array.from({ length: 5 }, (_, i) => 'Opsi ' + 'ABCDE'[i] + ' (%)'), 'Kunci', 'Rekomendasi'],
+                ...A.butir.map(b => [b.no, b.materi, b.tpId ? D.P.label[b.tpId] : '', b.level || '', r2(b.p), b.kat, r2(b.D), b.katD, ...Array.from({ length: 5 }, (_, i) => i < b.pilih.length ? Math.round(100 * b.pilih[i] / A.n) : ''), 'ABCDE'[b.kunci], b.rek])];
+            const ws = XLSX.utils.aoa_to_sheet(aoa), wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Analisis');
+            XLSX.writeFile(wb, ('Analisis_' + D.tes.judul).replace(/[^\w-]+/g, '_') + '.xlsx');
         }
 
         // --- Hasil ---
@@ -2225,9 +2437,9 @@
                 return `<tr><td>${i + 1}</td><td style="text-align:left; white-space:nowrap;">${esc(x.nama)}</td><td>${esc(x.kelas ? x.kelas.nama : '')}</td><td>${st}</td><td>${s && s.status === 'selesai' ? s.benar + '/' + s.total : '-'}</td><td><b>${s && s.status === 'selesai' ? fn1(Number(s.skor)) : '-'}</b></td>${per}<td>${s ? `<button class="btn-outline" style="padding:0 8px;" title="Reset agar siswa dapat mengulang" onclick="resetSesi('${s.id}')">↺</button>` : ''}</td></tr>`;
             }).join('');
             return pilihTes + `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center;"><span style="font-size:0.85rem;">Selesai <b>${selesai.length}</b> dari ${sw.data.length} siswa • Rata-rata ${fn1(rata)}</span></div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><button class="btn-outline" onclick="renderContent('nilai')">🔄 Muat Ulang</button><button class="btn-outline" onclick="selesaikanSemua()">⏹ Selesaikan yang Berjalan</button><button class="btn-outline" onclick="terapkanKeNilai()">✅ Terapkan ke Daftar Nilai</button><button class="btn-outline" onclick="unduhHasilCbt()">⬇️ Excel</button></div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><button class="btn-outline" onclick="renderContent('nilai')">🔄 Muat Ulang</button><button class="btn-outline" onclick="selesaikanSemua()">⏹ Selesaikan yang Berjalan</button><button class="btn-outline" onclick="terapkanKeNilai()">➡ Kirim Nilai Awal ke Perbaikan &amp; Pengayaan</button><button class="btn-outline" onclick="unduhHasilCbt()">⬇️ Excel</button></div>
                 <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Status</th><th>Benar</th><th>Skor</th>${materi.map(m => `<th>${esc(m.nama)}</th>`).join('')}<th></th></tr>${baris}</table></div>
-                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Skor materi = persentase soal materi itu yang dijawab benar. "Terapkan ke Daftar Nilai" mengisi Nilai Sumatif tiap materi dan menimpa nilai sumatif yang sudah ada pada materi tersebut.</p>`;
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Skor materi = persentase soal materi itu yang dijawab benar. "Kirim Nilai Awal" mengisi Nilai Awal tiap materi di tab Perbaikan &amp; Pengayaan. Nilai Sumatif di Daftar Nilai baru terisi setelah tindak lanjut selesai dan Nilai Akhir diterapkan.</p>`;
         }
         async function selesaikanSemua() {
             if (!confirm('Selesaikan dan nilai semua sesi yang masih berjalan sekarang?')) return;
@@ -2244,14 +2456,14 @@
         }
         async function terapkanKeNilai() {
             const h = window.cbtHasil, baris = [];
-            h.sesi.filter(s => s.status === 'selesai').forEach(s => (s.cbt_hasil_materi || []).forEach(m => baris.push({ siswa_id: s.siswa_id, materi_id: m.materi_id, skor: Number(m.skor) })));
-            if (!baris.length) { showToast('Belum ada hasil yang selesai untuk diterapkan.', true); return; }
-            if (!confirm('Terapkan ' + baris.length + ' nilai sumatif ke Daftar Nilai? Nilai sumatif yang sudah ada pada materi terkait akan ditimpa.')) return;
+            h.sesi.filter(s => s.status === 'selesai').forEach(s => (s.cbt_hasil_materi || []).forEach(m => baris.push({ siswa_id: s.siswa_id, materi_id: m.materi_id, skor_awal: Number(m.skor) })));
+            if (!baris.length) { showToast('Belum ada hasil yang selesai untuk dikirim.', true); return; }
+            if (!confirm('Kirim ' + baris.length + ' nilai awal ke Perbaikan & Pengayaan? Nilai awal yang sudah ada pada materi terkait akan diperbarui. Nilai sumatif di Daftar Nilai baru terisi setelah Nilai Akhir diterapkan.')) return;
             for (let i = 0; i < baris.length; i += 500) {
                 const { error } = await sb.from('nilai_sumatif').upsert(baris.slice(i, i + 500), { onConflict: 'siswa_id,materi_id' });
                 if (error) { showToast('Gagal: ' + error.message, true); return; }
             }
-            showToast(baris.length + ' nilai sumatif diterapkan ke Daftar Nilai.');
+            showToast(baris.length + ' nilai awal dikirim. Lanjutkan di tab Perbaikan & Pengayaan.');
         }
         function unduhHasilCbt() {
             if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
@@ -2262,6 +2474,313 @@
             ws['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 32 }, { wch: 10 }, { wch: 13 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
             XLSX.utils.book_append_sheet(wb, ws, 'Hasil');
             XLSX.writeFile(wb, ('Hasil_CBT_' + h.tes.judul).replace(/[^\w-]+/g, '_') + '.xlsx');
+        }
+
+        // === PROGRAM PERBAIKAN & PENGAYAAN (nilai awal -> tindak lanjut -> nilai akhir) ===
+        const KOTA_TTD = 'Boalemo';
+        const PP_INFO = {
+            D: { ket: 'Perlu Bimbingan', jenis: 'REMEDIAL', teks: 'Peserta didik diarahkan untuk mendapatkan bimbingan khusus dari guru mata pelajaran guna memahami kembali konsep dasar pada materi yang telah diajarkan.' },
+            C: { ket: 'Membuat Rangkuman', jenis: 'REMEDIAL', teks: 'Peserta didik diminta membuat rangkuman pokok bahasan sebagai bentuk penguatan pemahaman terhadap materi yang telah diajarkan.' },
+            B: { ket: 'Pendalaman Materi', jenis: 'PENGAYAAN', teks: 'Peserta didik diberikan pendalaman materi dalam bentuk pembahasan soal-soal tingkat lanjut untuk memperkuat penguasaan konsep.' },
+            A: { ket: 'Aplikasi Soal HOTS', jenis: 'PENGAYAAN', teks: 'Peserta didik diberikan soal-soal HOTS (Higher Order Thinking Skills) sebagai bentuk pengayaan sesuai dengan potensi yang dimiliki.' }
+        };
+        const katPP = (a) => (a == null || isNaN(a)) ? null : (a < 50 ? 'D' : a < 70 ? 'C' : a < 85 ? 'B' : 'A');
+        function akhirPP(a, s) {
+            if (a == null || isNaN(a)) return null;
+            const kkm = Number(s.kkm), mn = Number(s.nilai_min), mx = Number(s.nilai_maks), dn = Number(s.nilai_diinginkan);
+            let v = mx === mn ? kkm : Math.round(kkm + ((a - mn) / (mx - mn)) * (dn - kkm));
+            if (!isFinite(v)) v = kkm;
+            return Math.max(kkm, Math.min(dn, v));
+        }
+        function ubahPP(k, v) { window.ppS[k] = v; renderContent('nilai'); }
+        async function htmlPP() {
+            if (!sb) return '<p style="color:var(--text-muted);">Fitur ini membutuhkan koneksi Supabase.</p>';
+            const st = (window.ppS = window.ppS || { semester: semesterSaatIni() });
+            const kr = await sb.from('kelas').select('id, nama, tahun_ajaran').order('nama');
+            if (kr.error) throw new Error(kr.error.message);
+            if (!kr.data.length) return '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
+            if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
+            const kelas = kr.data.find(k => k.id === st.kelasId), tk = tingkatDari(kelas.nama);
+            const mt = tk ? await sb.from('materi').select('id, nama').eq('tingkat', tk).eq('semester', st.semester).order('urutan') : { data: [] };
+            if (mt.error) throw new Error(mt.error.message);
+            const kontrol = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahPP('kelasId', this.value)" style="flex:1; min-width:110px;">${kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select><select onchange="ubahPP('semester', this.value)" style="flex:1; min-width:110px;">${semesterOpsi(st.semester)}</select><select onchange="ubahPP('materiId', this.value)" style="flex:2; min-width:160px;">${mt.data.map(m => `<option value="${m.id}" ${m.id === st.materiId ? 'selected' : ''}>${esc(m.nama)}</option>`).join('')}</select></div>`;
+            if (!mt.data.length) return kontrol + `<p style="color:var(--text-muted);">Belum ada materi ${tk ? 'Kelas ' + tk : ''} pada semester ini. Atur di MPI.</p>`;
+            if (!mt.data.some(m => m.id === st.materiId)) st.materiId = mt.data[0].id;
+            const materi = mt.data.find(m => m.id === st.materiId);
+            const [sw, ns, ps] = await Promise.all([
+                sb.from('siswa').select('id, nis, nama').eq('kelas_id', st.kelasId).order('nama'),
+                sb.from('nilai_sumatif').select('siswa_id, skor, skor_awal, status_pp').eq('materi_id', st.materiId),
+                sb.from('pp_sesi').select('tanggal, kkm, nilai_min, nilai_maks, nilai_diinginkan').eq('kelas_id', st.kelasId).eq('materi_id', st.materiId).maybeSingle()
+            ]);
+            if (sw.error || ns.error || ps.error) throw new Error((sw.error || ns.error || ps.error).message);
+            const sesi = Object.assign({ tanggal: localDate(), kkm: 70, nilai_min: 0, nilai_maks: 100, nilai_diinginkan: 100 }, ps.data || {});
+            if (!sesi.tanggal) sesi.tanggal = localDate();
+            const data = {};
+            ns.data.forEach(r => { data[r.siswa_id] = { awal: r.skor_awal != null ? Number(r.skor_awal) : (r.skor != null ? Number(r.skor) : null), selesai: r.status_pp === 'selesai', akhir: r.skor != null ? Number(r.skor) : null }; });
+            window.ppD = { kelas, materi, siswa: sw.data, data, sesi, tahun: kelas.tahun_ajaran || '' };
+            if (!sw.data.length) return kontrol + '<p style="color:var(--text-muted);">Belum ada siswa di kelas ini.</p>';
+            const baris = sw.data.map((x, i) => `<tr id="pp-r-${x.id}"><td>${i + 1}</td><td style="text-align:left; white-space:nowrap;">${esc(x.nama)}</td><td><input type="number" min="0" max="100" step="0.01" value="${(data[x.id] && data[x.id].awal != null) ? data[x.id].awal : ''}" onchange="ubahAwalPP('${x.id}', this.value)" style="width:78px; padding:4px;"></td><td id="pp-k-${x.id}"></td><td id="pp-j-${x.id}"></td><td id="pp-t-${x.id}" style="text-align:left;"></td><td><input type="checkbox" id="pp-s-${x.id}" ${data[x.id] && data[x.id].selesai ? 'checked' : ''} onchange="ubahStatusPP('${x.id}', this.checked)" style="width:auto;"></td><td id="pp-a-${x.id}"><b>-</b></td></tr>`).join('');
+            const f = (id, label, val, tipe, ket) => `<div style="flex:1; min-width:130px;"><label style="font-size:0.72rem; color:var(--text-muted);">${label}</label><input id="${id}" type="${tipe || 'number'}" value="${val ?? ''}" ${tipe === 'date' ? '' : 'step="0.01"'} onchange="ubahSesiPP(this)" title="${ket || ''}"></div>`;
+            return kontrol + `
+                <div style="${kotakCbt}"><strong style="font-size:0.9rem;">⚙️ Pengaturan Sesi — ${esc(materi.nama)}</strong>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;">${f('pps-tanggal', 'Tanggal pelaksanaan', sesi.tanggal, 'date')}${f('pps-kkm', 'KKM', sesi.kkm)}${f('pps-min', 'Nilai terendah kelas', sesi.nilai_min)}${f('pps-maks', 'Nilai tertinggi kelas', sesi.nilai_maks)}${f('pps-dn', 'Nilai tertinggi yang diinginkan', sesi.nilai_diinginkan)}</div>
+                    <button class="btn-outline" onclick="pakaiNilaiKelasPP()">Pakai nilai terendah/tertinggi dari data kelas</button>
+                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Nilai Akhir = KKM + ((Nilai Awal − Nilai Terendah Kelas) ÷ (Nilai Tertinggi Kelas − Nilai Terendah Kelas)) × (Nilai Tertinggi Diinginkan − KKM). Nilai Akhir tidak kurang dari KKM dan tidak lebih dari nilai tertinggi yang diinginkan.</p></div>
+                <div id="pp-ringkas" style="margin-bottom:10px;"></div>
+                <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th><th>Nilai Awal</th><th>Kategori</th><th>Jenis</th><th>Tindak Lanjut</th><th>Selesai</th><th>Nilai Akhir</th></tr>${baris}</table></div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;"><button class="btn-outline" onclick="tandaiSemuaPP()">✅ Tandai Semua Selesai</button><button class="btn-submit" style="flex:1; min-width:220px;" onclick="terapkanNilaiAkhirPP()">➡ Terapkan Nilai Akhir ke Daftar Nilai</button></div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"><button class="btn-outline" onclick="cetakProgramPP()">🖨️ Program Cetak</button><button class="btn-outline" onclick="cetakSuratPP()">🧾 Surat Tugas Individual</button><button class="btn-outline" onclick="unduhProgramPPExcel()">⬇️ Excel (format Dashboard)</button></div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Kategori: D &lt; 50, C 50–69, B 70–84, A 85–100. D dan C menjalani remedial, B dan A menjalani pengayaan. Seluruh siswa mendapat Nilai Akhir lewat rumus di atas, termasuk yang menjalani pengayaan. Nilai Akhir hanya diterapkan ke Daftar Nilai untuk siswa yang ditandai selesai.</p>`;
+        }
+        function segarkanPP() {
+            const D = window.ppD, c = { D: 0, C: 0, B: 0, A: 0 }; let sa = 0, sk = 0, n = 0;
+            D.siswa.forEach(x => {
+                const d = D.data[x.id] || {}, k = katPP(d.awal), a = akhirPP(d.awal, D.sesi), set = (id, h) => { const e = document.getElementById(id + x.id); if (e) e.innerHTML = h; };
+                set('pp-k-', k ? `<span class="pr-chip ${k === 'D' || k === 'C' ? 'pr-Kurang' : 'pr-Istimewa'}">${k}</span>` : '-');
+                set('pp-j-', k ? `<span style="font-size:0.72rem; font-weight:700; color:${PP_INFO[k].jenis === 'REMEDIAL' ? '#b45309' : '#166534'};">${PP_INFO[k].jenis}</span>` : '-');
+                set('pp-t-', k ? PP_INFO[k].ket : '-');
+                set('pp-a-', `<b>${a == null ? '-' : a}</b>`);
+                if (k) { c[k]++; n++; sa += d.awal; sk += a; }
+            });
+            const chip = (t, v) => `<span class="abs-chip">${t}: <b>${v}</b></span>`;
+            const e = document.getElementById('pp-ringkas');
+            if (e) e.innerHTML = `<div style="display:flex; gap:6px; flex-wrap:wrap;">${chip('D Perlu Bimbingan', c.D)}${chip('C Membuat Rangkuman', c.C)}${chip('B Pendalaman Materi', c.B)}${chip('A Aplikasi HOTS', c.A)}${chip('Remedial', c.D + c.C)}${chip('Pengayaan', c.B + c.A)}${chip('Rata-rata awal', n ? fn1(sa / n) : '-')}${chip('Rata-rata akhir', n ? fn1(sk / n) : '-')}</div>`;
+        }
+        async function simpanSesiPP() {
+            const D = window.ppD, st = window.ppS;
+            const { error } = await sb.from('pp_sesi').upsert({ kelas_id: st.kelasId, materi_id: st.materiId, tanggal: D.sesi.tanggal || null, kkm: D.sesi.kkm, nilai_min: D.sesi.nilai_min, nilai_maks: D.sesi.nilai_maks, nilai_diinginkan: D.sesi.nilai_diinginkan }, { onConflict: 'kelas_id,materi_id' });
+            if (error) showToast('Gagal menyimpan pengaturan: ' + error.message + ' (jalankan supabase_patch_13.sql)', true);
+        }
+        async function ubahSesiPP(el) {
+            const peta = { 'pps-tanggal': 'tanggal', 'pps-kkm': 'kkm', 'pps-min': 'nilai_min', 'pps-maks': 'nilai_maks', 'pps-dn': 'nilai_diinginkan' }, k = peta[el.id], D = window.ppD;
+            D.sesi[k] = k === 'tanggal' ? (el.value || null) : (el.value === '' ? 0 : Number(el.value));
+            segarkanPP();
+            await simpanSesiPP();
+        }
+        async function pakaiNilaiKelasPP() {
+            const D = window.ppD, v = D.siswa.map(x => (D.data[x.id] || {}).awal).filter(a => a != null);
+            if (!v.length) { showToast('Belum ada nilai awal pada kelas ini.', true); return; }
+            D.sesi.nilai_min = Math.min(...v); D.sesi.nilai_maks = Math.max(...v);
+            document.getElementById('pps-min').value = D.sesi.nilai_min; document.getElementById('pps-maks').value = D.sesi.nilai_maks;
+            segarkanPP();
+            await simpanSesiPP();
+            showToast('Nilai terendah dan tertinggi kelas diperbarui dari data.');
+        }
+        async function ubahAwalPP(sid, val) {
+            const D = window.ppD, v = String(val).trim() === '' ? null : Number(val);
+            if (v !== null && (isNaN(v) || v < 0 || v > 100)) { showToast('Nilai awal harus 0 sampai 100.', true); return; }
+            const { error } = await sb.from('nilai_sumatif').upsert({ siswa_id: sid, materi_id: window.ppS.materiId, skor_awal: v }, { onConflict: 'siswa_id,materi_id' });
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_13.sql)', true); return; }
+            D.data[sid] = Object.assign(D.data[sid] || { selesai: false, akhir: null }, { awal: v });
+            segarkanPP();
+        }
+        async function ubahStatusPP(sid, selesai) {
+            const D = window.ppD, d = D.data[sid] || {}, k = katPP(d.awal);
+            const { error } = await sb.from('nilai_sumatif').upsert({ siswa_id: sid, materi_id: window.ppS.materiId, status_pp: selesai ? 'selesai' : 'belum', tindak_lanjut: k ? PP_INFO[k].ket : null }, { onConflict: 'siswa_id,materi_id' });
+            if (error) { showToast('Gagal: ' + error.message, true); document.getElementById('pp-s-' + sid).checked = !selesai; return; }
+            D.data[sid] = Object.assign(D.data[sid] || { awal: null, akhir: null }, { selesai });
+        }
+        async function tandaiSemuaPP() {
+            const D = window.ppD, rows = D.siswa.filter(x => (D.data[x.id] || {}).awal != null).map(x => ({ siswa_id: x.id, materi_id: window.ppS.materiId, status_pp: 'selesai', tindak_lanjut: PP_INFO[katPP(D.data[x.id].awal)].ket }));
+            if (!rows.length) { showToast('Belum ada nilai awal.', true); return; }
+            const { error } = await sb.from('nilai_sumatif').upsert(rows, { onConflict: 'siswa_id,materi_id' });
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            rows.forEach(r => { D.data[r.siswa_id].selesai = true; document.getElementById('pp-s-' + r.siswa_id).checked = true; });
+            showToast(rows.length + ' siswa ditandai selesai.');
+        }
+        async function terapkanNilaiAkhirPP() {
+            const D = window.ppD, rows = D.siswa.filter(x => { const d = D.data[x.id] || {}; return d.selesai && d.awal != null; }).map(x => ({ siswa_id: x.id, materi_id: window.ppS.materiId, skor: akhirPP(D.data[x.id].awal, D.sesi) }));
+            if (!rows.length) { showToast('Belum ada siswa yang ditandai selesai dan bernilai awal.', true); return; }
+            if (!confirm('Terapkan Nilai Akhir ' + rows.length + ' siswa ke Nilai Sumatif di Daftar Nilai? Nilai sumatif yang sudah ada pada materi ini akan ditimpa.')) return;
+            const { error } = await sb.from('nilai_sumatif').upsert(rows, { onConflict: 'siswa_id,materi_id' });
+            if (error) { showToast('Gagal: ' + error.message, true); return; }
+            rows.forEach(r => { D.data[r.siswa_id].akhir = r.skor; });
+            showToast(rows.length + ' nilai akhir diterapkan ke Daftar Nilai.');
+        }
+        const tglPanjang = (t) => t ? new Date(t + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+        function htmlProgramPP(D) {
+            const guru = window.guruNama || 'Guru Matematika', s = D.sesi;
+            const baris = D.siswa.filter(x => (D.data[x.id] || {}).awal != null).map((x, i) => { const a = D.data[x.id].awal, k = katPP(a); return `<tr><td>${i + 1}</td><td class="l">${esc(x.nama)}</td><td>${a}</td><td>${k}</td><td>${PP_INFO[k].jenis}</td><td class="l">${PP_INFO[k].ket}</td><td><b>${akhirPP(a, s)}</b></td></tr>`; }).join('');
+            return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Program Perbaikan dan Pengayaan</title><style>@page{size:A4 portrait;margin:10mm}${CSS_DOK}</style></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button></div>${kopDok('Program Perbaikan dan Pengayaan')}
+                <h2>PROGRAM PERBAIKAN DAN PENGAYAAN</h2>
+                <table style="width:70%; margin:6px auto;"><tr><td class="l" style="width:38%">Mata Pelajaran</td><td class="l">Matematika</td></tr><tr><td class="l">Pokok Bahasan / Materi</td><td class="l">${esc(D.materi.nama)}</td></tr><tr><td class="l">Kelas</td><td class="l">${esc(D.kelas.nama)}</td></tr><tr><td class="l">Tanggal Pelaksanaan</td><td class="l">${tglPanjang(s.tanggal)}</td></tr><tr><td class="l">Tahun Pelajaran</td><td class="l">${esc(D.tahun || '-')}</td></tr></table>
+                <table><tr><th style="width:5%">No</th><th>Nama Siswa</th><th style="width:10%">Nilai Awal</th><th style="width:10%">Kategori</th><th style="width:15%">Jenis Tindak Lanjut</th><th style="width:20%">Keterangan</th><th style="width:10%">Nilai Akhir</th></tr>${baris}</table>
+                <div style="width:45%; margin:28px 0 0 auto; text-align:center; font-size:12px;">${KOTA_TTD}, ${tglPanjang(s.tanggal)}<br>Guru Mata Pelajaran,<br><br><br><br><b>${esc(guru)}</b></div></body></html>`;
+        }
+        function htmlSuratPP(D) {
+            const guru = window.guruNama || 'Guru Matematika', s = D.sesi;
+            const surat = D.siswa.filter(x => (D.data[x.id] || {}).awal != null).map(x => {
+                const a = D.data[x.id].awal, k = katPP(a), i = PP_INFO[k], baris = (l, v) => `<tr><td class="l" style="width:32%">${l}</td><td class="l">${v}</td></tr>`;
+                return `<div class="surat">${kopDok('Surat Tugas Perbaikan / Pengayaan')}<h2>SURAT TUGAS PERBAIKAN / PENGAYAAN INDIVIDUAL</h2>
+                    <table style="width:85%; margin:8px auto;">${baris('Kelas', esc(D.kelas.nama))}${baris('Tanggal Pelaksanaan', tglPanjang(s.tanggal))}${baris('Pokok Bahasan / Materi', esc(D.materi.nama))}${baris('Nama Siswa', '<b>' + esc(x.nama) + '</b>')}${baris('Nilai Awal', a)}${baris('Kategori', k)}${baris('Jenis Tindak Lanjut', i.jenis)}${baris('Keterangan', i.ket)}${baris('Nilai Akhir', '<b>' + akhirPP(a, s) + '</b>')}</table>
+                    <p style="margin:14px 8% 4px;"><b>Rekomendasi Tindak Lanjut:</b></p><div style="border:1.3px solid #312e81; border-radius:6px; padding:10px 12px; margin:0 8%; min-height:60px;">${i.teks}</div>
+                    <div style="width:45%; margin:30px 8% 0 auto; text-align:center;">${KOTA_TTD}, ${tglPanjang(s.tanggal)}<br>Guru Mata Pelajaran,<br><br><br><br><b>${esc(guru)}</b></div></div>`;
+            }).join('');
+            return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Surat Tugas Individual</title><style>@page{size:A4 portrait;margin:12mm}${CSS_DOK}.surat{page-break-after:always;break-after:page;padding-top:6px}.surat:last-child{page-break-after:auto}</style></head><body>
+                <div class="noprint"><button onclick="window.print()">🖨️ Cetak / Simpan PDF</button> <small>Satu halaman per siswa.</small></div>${surat || '<p>Belum ada nilai awal.</p>'}</body></html>`;
+        }
+        function cetakProgramPP() { const D = window.ppD; if (!D.siswa.some(x => (D.data[x.id] || {}).awal != null)) { showToast('Belum ada nilai awal.', true); return; } bukaDokumen(htmlProgramPP(D)); }
+        function cetakSuratPP() { const D = window.ppD; if (!D.siswa.some(x => (D.data[x.id] || {}).awal != null)) { showToast('Belum ada nilai awal.', true); return; } bukaDokumen(htmlSuratPP(D)); }
+
+        // --- Ekspor Excel format Dashboard Program Perbaikan & Pengayaan ---
+        const rumusPP = (r, no) => ({
+            A: `IF(E${r}="","",${no})`,
+            E: `IFERROR(""&INDEX('Daftar Siswa'!$C$4:$C$348,MATCH($B${r}&"|"&${no},'Daftar Siswa'!$D$4:$D$348,0)),"")`,
+            G: `IF(OR(E${r}="",F${r}=""),"",IF(F${r}<50,"D",IF(F${r}<70,"C",IF(F${r}<85,"B","A"))))`,
+            H: `IF(G${r}="","",IF(OR(G${r}="D",G${r}="C"),"REMEDIAL","PENGAYAAN"))`,
+            I: `IF(G${r}="","",IF(G${r}="D","Perlu Bimbingan",IF(G${r}="C","Membuat Rangkuman",IF(G${r}="B","Pendalaman Materi","Aplikasi Soal HOTS"))))`,
+            J: `IF(F${r}="","",IFERROR(MAX(Dashboard!$D$13,MIN(Dashboard!$D$16,ROUND(Dashboard!$D$13+((F${r}-Dashboard!$D$14)/(Dashboard!$D$15-Dashboard!$D$14))*(Dashboard!$D$16-Dashboard!$D$13),0))),Dashboard!$D$13))`,
+            K: `IF(E${r}="","",B${r}&" | "&E${r}&" | "&TEXT(C${r},"DD/MM/YYYY"))`
+        });
+        const rumusRekap = (r) => ({
+            B: `COUNTIFS('Data Nilai'!$B$4:$B$403,$A${r},'Data Nilai'!$E$4:$E$403,"?*")`,
+            C: `IFERROR(AVERAGEIFS('Data Nilai'!$F$4:$F$403,'Data Nilai'!$B$4:$B$403,$A${r}),"")`,
+            D: `IF($B${r}=0,"",IFERROR(_xlfn.MAXIFS('Data Nilai'!$F$4:$F$403,'Data Nilai'!$B$4:$B$403,$A${r}),""))`,
+            E: `IF($B${r}=0,"",IFERROR(_xlfn.MINIFS('Data Nilai'!$F$4:$F$403,'Data Nilai'!$B$4:$B$403,$A${r}),""))`,
+            F: `COUNTIFS('Data Nilai'!$B$4:$B$403,$A${r},'Data Nilai'!$G$4:$G$403,"D")`,
+            G: `COUNTIFS('Data Nilai'!$B$4:$B$403,$A${r},'Data Nilai'!$G$4:$G$403,"C")`,
+            H: `COUNTIFS('Data Nilai'!$B$4:$B$403,$A${r},'Data Nilai'!$G$4:$G$403,"B")`,
+            I: `COUNTIFS('Data Nilai'!$B$4:$B$403,$A${r},'Data Nilai'!$G$4:$G$403,"A")`,
+            J: `IFERROR((F${r}+G${r})/B${r},"")`,
+            K: `IFERROR((H${r}+I${r})/B${r},"")`
+        });
+        const rumusProgram = (rd, no) => {
+            const ada = `'Data Nilai'!$E${rd}=""`, ambil = (k) => `IF(${ada},"",'Data Nilai'!$${k}${rd})`;
+            return { A: `IF(${ada},"",${no})`, B: ambil('E'), C: `IF(OR(${ada},'Data Nilai'!$F${rd}=""),"",'Data Nilai'!$F${rd})`, D: ambil('G'), E: ambil('H'), F: ambil('I'), G: `IF(OR(${ada},'Data Nilai'!$J${rd}=""),"",'Data Nilai'!$J${rd})` };
+        };
+        async function unduhProgramPPExcel() {
+            const D = window.ppD;
+            if (!D) return;
+            showToast('Menyiapkan Excel...');
+            try { if (!window.ExcelJS) await muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'); }
+            catch (e) { showToast('Pustaka Excel gagal dimuat. Periksa koneksi internet.', true); return; }
+            try {
+                const wb = new ExcelJS.Workbook(), s = D.sesi, guru = window.guruNama || 'Guru Matematika', kelasNm = D.kelas.nama;
+                const NAVY = 'FF1B263B', TEAL = 'FF2A9D8F', INPUT = 'FFFFF3CD', WARNA = { D: 'FFE63946', C: 'FFF4A261', B: 'FF457B9D', A: 'FF2A9D8F' };
+                const tepi = { top: { style: 'thin', color: { argb: 'FFB0B7C3' } }, left: { style: 'thin', color: { argb: 'FFB0B7C3' } }, bottom: { style: 'thin', color: { argb: 'FFB0B7C3' } }, right: { style: 'thin', color: { argb: 'FFB0B7C3' } } };
+                const isi = (c) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+                const gaya = (c, o) => { c.font = Object.assign({ name: 'Arial', size: 10 }, o.font || {}); if (o.fill) c.fill = isi(o.fill); if (o.align) c.alignment = Object.assign({ vertical: 'middle', wrapText: true }, o.align); if (o.border) c.border = tepi; if (o.fmt) c.numFmt = o.fmt; };
+                const gabung = (ws, rng, nilai, o) => { ws.mergeCells(rng); const c = ws.getCell(rng.split(':')[0]); c.value = nilai; gaya(c, o); };
+                const siswa = D.siswa, N = siswa.length, baris = Math.max(N, 45), tgl = s.tanggal ? new Date(s.tanggal + 'T00:00:00') : null;
+                const baru = siswa.map(x => { const a = (D.data[x.id] || {}).awal, aw = a === undefined ? null : a; return { nama: x.nama, awal: aw, kat: katPP(aw), akhir: akhirPP(aw, s) }; });
+                const ring = ['D', 'C', 'B', 'A'].map(k => baru.filter(b => b.kat === k).length);
+
+                // Dashboard
+                const wsD = wb.addWorksheet('Dashboard', { views: [{ state: 'frozen', ySplit: 4 }] });
+                [3, 26, 17, 24, 20, 14, 14, 3].forEach((w, i) => { wsD.getColumn(i + 1).width = w; });
+                gabung(wsD, 'A1:H3', 'DASHBOARD PROGRAM PERBAIKAN DAN PENGAYAAN', { font: { size: 20, bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' } });
+                gabung(wsD, 'A4:H4', 'Kelas ' + (tingkatDari(kelasNm) || '') + '  |  Matematika  |  Klasifikasi otomatis: D - C - B - A', { font: { size: 11, color: { argb: 'FFFFFFFF' } }, fill: 'FF0D1B2A', align: { horizontal: 'center' } });
+                gabung(wsD, 'B6:G6', '⚙  PENGATURAN SESI AKTIF  (dipakai oleh sheet Data Nilai & Program Cetak)', { font: { size: 12, bold: true, color: { argb: 'FFFFFFFF' } }, fill: TEAL, align: { horizontal: 'left' } });
+                const set = [['Mata Pelajaran', 'Matematika'], ['Pokok Bahasan / Materi', D.materi.nama], ['Kelas / Semester', kelasNm], ['Tanggal Pelaksanaan', tgl], ['Tahun Pelajaran', D.tahun || ''], ['Guru Mata Pelajaran', guru], ['KKM (Nilai Ketuntasan Minimum)', Number(s.kkm)], ['Nilai Terendah Kelas', Number(s.nilai_min)], ['Nilai Tertinggi Kelas', Number(s.nilai_maks)], ['Nilai Tertinggi yang Diinginkan Guru', Number(s.nilai_diinginkan)]];
+                set.forEach(([l, v], i) => {
+                    const r = 7 + i; gaya(wsD.getCell('B' + r), { font: { bold: true }, align: { horizontal: 'left' } }); wsD.getCell('B' + r).value = l;
+                    gabung(wsD, `D${r}:G${r}`, v, { font: { bold: i >= 6, color: { argb: 'FF1D3557' }, size: i >= 6 ? 12 : 11 }, fill: INPUT, align: { horizontal: i >= 6 ? 'center' : 'left' }, border: true, fmt: i === 3 ? 'dd mmmm yyyy' : undefined });
+                });
+                gabung(wsD, 'B17:G17', 'ℹ  Nilai Akhir = KKM + ((Nilai Awal − Nilai Terendah Kelas) / (Nilai Tertinggi Kelas − Nilai Terendah Kelas)) × (Nilai Tertinggi Diinginkan − KKM), tidak kurang dari KKM dan tidak lebih dari Nilai Tertinggi Diinginkan.', { font: { size: 9, color: { argb: 'FF444444' } }, align: { horizontal: 'left' } });
+                wsD.getRow(17).height = 28;
+                gabung(wsD, 'B19:G19', '📊  RINGKASAN KATEGORI (SELURUH DATA)', { font: { size: 12, bold: true, color: { argb: 'FFFFFFFF' } }, fill: TEAL, align: { horizontal: 'left' } });
+                ['Kategori', 'Jenis', 'Keterangan', 'Rentang Nilai'].forEach((t, i) => { const c = wsD.getCell(20, 2 + i); c.value = t; gaya(c, { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                gabung(wsD, 'F20:G20', 'Jumlah Siswa', { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true });
+                const rentang = { D: '< 50', C: '50 - 69', B: '70 - 84', A: '85 - 100' };
+                ['D', 'C', 'B', 'A'].forEach((k, i) => {
+                    const r = 21 + i;
+                    [[k, WARNA[k]], [PP_INFO[k].jenis], [PP_INFO[k].ket], [rentang[k]]].forEach(([v, f], j) => { const c = wsD.getCell(r, 2 + j); c.value = v; gaya(c, { font: { bold: j === 0, color: { argb: j === 0 ? 'FFFFFFFF' : 'FF000000' } }, fill: f, align: { horizontal: 'center' }, border: true }); });
+                    gabung(wsD, `F${r}:G${r}`, { formula: `COUNTIF('Data Nilai'!$G$4:$G$403,"${k}")`, result: ring[i] }, { font: { bold: true }, align: { horizontal: 'center' }, border: true });
+                });
+                gabung(wsD, 'B25:E25', 'TOTAL SISWA DINILAI', { font: { bold: true }, align: { horizontal: 'right' }, border: true });
+                gabung(wsD, 'F25:G25', { formula: 'SUM(F21:F24)', result: ring.reduce((a, b) => a + b, 0) }, { font: { bold: true }, align: { horizontal: 'center' }, border: true });
+
+                // Daftar Siswa
+                const wsS = wb.addWorksheet('Daftar Siswa', { views: [{ state: 'frozen', ySplit: 3 }] });
+                [10, 11, 34, 14].forEach((w, i) => { wsS.getColumn(i + 1).width = w; });
+                gabung(wsS, 'A1:D1', 'DAFTAR SISWA PER KELAS', { font: { size: 14, bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' } });
+                gabung(wsS, 'A2:D2', 'Isi NAMA SISWA sesuai NO ABSEN. Nama otomatis muncul di sheet Data Nilai dan Program Cetak.', { font: { size: 9, color: { argb: 'FF444444' } }, align: { horizontal: 'left' } });
+                ['KELAS', 'NO ABSEN', 'NAMA SISWA', 'KEY'].forEach((t, i) => { const c = wsS.getCell(3, i + 1); c.value = t; gaya(c, { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                siswa.forEach((x, i) => {
+                    const r = 4 + i;
+                    wsS.getCell(r, 1).value = kelasNm; wsS.getCell(r, 2).value = i + 1; wsS.getCell(r, 3).value = x.nama;
+                    wsS.getCell(r, 4).value = { formula: `A${r}&"|"&B${r}`, result: kelasNm + '|' + (i + 1) };
+                    for (let c = 1; c <= 4; c++) gaya(wsS.getCell(r, c), { font: {}, fill: c === 3 ? INPUT : undefined, align: { horizontal: c === 3 ? 'left' : 'center' }, border: true });
+                });
+
+                // Data Nilai
+                const wsN = wb.addWorksheet('Data Nilai', { views: [{ state: 'frozen', xSplit: 5, ySplit: 3 }] });
+                [7, 10, 13, 22, 28, 11, 11, 18, 22, 11, 3].forEach((w, i) => { wsN.getColumn(i + 1).width = w; });
+                gabung(wsN, 'A1:K1', 'DATA NILAI & KLASIFIKASI OTOMATIS PERBAIKAN / PENGAYAAN', { font: { size: 14, bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' } });
+                gabung(wsN, 'A2:K2', 'Kelas dan nama berasal dari sheet Daftar Siswa; tanggal dan materi mengikuti Dashboard. Isi NILAI AWAL (kolom kuning); kolom lain terhitung otomatis.', { font: { size: 9, color: { argb: 'FF444444' } }, align: { horizontal: 'left' } });
+                ['NO ABSEN', 'KELAS', 'TANGGAL', 'MATERI', 'NAMA SISWA', 'NILAI AWAL', 'KATEGORI', 'JENIS TINDAK LANJUT', 'KETERANGAN', 'NILAI AKHIR', 'LABEL'].forEach((t, i) => { const c = wsN.getCell(3, i + 1); c.value = t; gaya(c, { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                for (let i = 0; i < baris; i++) {
+                    const r = 4 + i, f = rumusPP(r, i + 1), b = baru[i], ada = !!b;
+                    wsN.getCell('A' + r).value = { formula: f.A, result: ada ? i + 1 : '' };
+                    wsN.getCell('B' + r).value = kelasNm;
+                    wsN.getCell('C' + r).value = { formula: 'Dashboard!$D$10', result: tgl || '' };
+                    wsN.getCell('D' + r).value = { formula: 'Dashboard!$D$8', result: D.materi.nama };
+                    wsN.getCell('E' + r).value = { formula: f.E, result: ada ? b.nama : '' };
+                    if (ada && b.awal !== null) wsN.getCell('F' + r).value = b.awal;
+                    wsN.getCell('G' + r).value = { formula: f.G, result: ada && b.kat ? b.kat : '' };
+                    wsN.getCell('H' + r).value = { formula: f.H, result: ada && b.kat ? PP_INFO[b.kat].jenis : '' };
+                    wsN.getCell('I' + r).value = { formula: f.I, result: ada && b.kat ? PP_INFO[b.kat].ket : '' };
+                    wsN.getCell('J' + r).value = { formula: f.J, result: ada && b.akhir !== null ? b.akhir : '' };
+                    wsN.getCell('K' + r).value = { formula: f.K, result: ada ? kelasNm + ' | ' + b.nama + ' | ' + (s.tanggal ? s.tanggal.split('-').reverse().join('/') : '') : '' };
+                    'ABCDEFGHIJ'.split('').forEach((h, j) => gaya(wsN.getCell(h + r), { font: { bold: h === 'G' || h === 'J', color: { argb: h === 'J' ? 'FF1D3557' : 'FF000000' } }, fill: h === 'F' ? INPUT : undefined, align: { horizontal: h === 'E' || h === 'D' || h === 'I' ? 'left' : 'center' }, border: true, fmt: h === 'C' ? 'dd/mm/yyyy' : undefined }));
+                }
+                wsN.getColumn(11).hidden = true;
+                wsN.addConditionalFormatting({ ref: 'G4:G' + (3 + baris), rules: ['D', 'C', 'B', 'A'].map(k => ({ type: 'cellIs', operator: 'equal', formulae: ['"' + k + '"'], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: WARNA[k] } }, font: { color: { argb: 'FFFFFFFF' }, bold: true } } })) });
+                wsN.getColumn(6).eachCell(c => { if (c.row > 3) c.dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [0, 100], showErrorMessage: true, error: 'Nilai awal harus 0 sampai 100.' }; });
+
+                // Rekap & Statistik
+                const wsR = wb.addWorksheet('Rekap & Statistik', { views: [{ state: 'frozen', ySplit: 3 }] });
+                [12, 14, 16, 14, 14, 16, 18, 18, 16, 14, 14].forEach((w, i) => { wsR.getColumn(i + 1).width = w; });
+                gabung(wsR, 'A1:K1', 'REKAP & STATISTIK PER KELAS', { font: { size: 14, bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' } });
+                ['KELAS', 'JUMLAH SISWA', 'RATA-RATA NILAI AWAL', 'NILAI TERTINGGI', 'NILAI TERENDAH', 'D (Perlu Bimbingan)', 'C (Membuat Rangkuman)', 'B (Pendalaman Materi)', 'A (Aplikasi HOTS)', '% REMEDIAL', '% PENGAYAAN'].forEach((t, i) => { const c = wsR.getCell(3, i + 1); c.value = t; gaya(c, { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                const nilaiAda = baru.filter(b => b.awal !== null).map(b => b.awal), fr = rumusRekap(4), tot = baru.length;
+                wsR.getCell('A4').value = kelasNm;
+                wsR.getCell('B4').value = { formula: fr.B, result: tot };
+                wsR.getCell('C4').value = { formula: fr.C, result: nilaiAda.length ? nilaiAda.reduce((a, b) => a + b, 0) / nilaiAda.length : '' };
+                wsR.getCell('D4').value = { formula: fr.D, result: nilaiAda.length ? Math.max(...nilaiAda) : '' };
+                wsR.getCell('E4').value = { formula: fr.E, result: nilaiAda.length ? Math.min(...nilaiAda) : '' };
+                ['F', 'G', 'H', 'I'].forEach((h, i) => { wsR.getCell(h + '4').value = { formula: fr[h], result: ring[i] }; });
+                wsR.getCell('J4').value = { formula: fr.J, result: tot ? (ring[0] + ring[1]) / tot : '' };
+                wsR.getCell('K4').value = { formula: fr.K, result: tot ? (ring[2] + ring[3]) / tot : '' };
+                'ABCDEFGHIJK'.split('').forEach(h => gaya(wsR.getCell(h + '4'), { font: { bold: h === 'A' }, align: { horizontal: 'center' }, border: true, fmt: h === 'C' ? '0.0' : (h === 'J' || h === 'K' ? '0%' : undefined) }));
+
+                // Program Cetak
+                const wsP = wb.addWorksheet('Program Cetak', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+                [6, 26, 10, 12, 18, 22, 11, 3].forEach((w, i) => { wsP.getColumn(i + 1).width = w; });
+                gabung(wsP, 'A1:G1', 'PROGRAM PERBAIKAN DAN PENGAYAAN', { font: { size: 15, bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' } });
+                gabung(wsP, 'A2:G2', 'Data mengikuti sheet Data Nilai dan Dashboard.', { font: { size: 9, color: { argb: 'FF444444' } }, align: { horizontal: 'left' } });
+                [['Mata Pelajaran', 'Dashboard!$D$7', 'Matematika'], ['Pokok Bahasan / Materi', 'Dashboard!$D$8', D.materi.nama], ['Kelas / Semester', 'Dashboard!$D$9', kelasNm], ['Tanggal Pelaksanaan', 'Dashboard!$D$10', tgl], ['Tahun Pelajaran', 'Dashboard!$D$11', D.tahun || '']].forEach(([l, f, h], i) => {
+                    const r = 4 + i; wsP.getCell('B' + r).value = l; gaya(wsP.getCell('B' + r), { font: { bold: true } });
+                    gabung(wsP, `D${r}:F${r}`, { formula: f, result: h }, { font: { color: { argb: 'FF444444' } }, align: { horizontal: 'left' }, fmt: i === 3 ? 'dd mmmm yyyy' : undefined });
+                });
+                ['NO', 'NAMA SISWA', 'NILAI AWAL', 'KATEGORI', 'JENIS TINDAK LANJUT', 'KETERANGAN', 'NILAI AKHIR'].forEach((t, i) => { const c = wsP.getCell(10, i + 1); c.value = t; gaya(c, { font: { bold: true, size: 9, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                const nPC = Math.max(N, 22);
+                for (let i = 0; i < nPC; i++) {
+                    const r = 11 + i, f = rumusProgram(4 + i, i + 1), b = baru[i], ada = !!b && b.awal !== null;
+                    const hasil = { A: ada ? i + 1 : '', B: b ? b.nama : '', C: ada ? b.awal : '', D: ada ? b.kat : '', E: ada ? PP_INFO[b.kat].jenis : '', F: ada ? PP_INFO[b.kat].ket : '', G: ada ? b.akhir : '' };
+                    'ABCDEFG'.split('').forEach(h => { const c = wsP.getCell(h + r); c.value = { formula: f[h], result: hasil[h] }; gaya(c, { font: { bold: h === 'G' }, align: { horizontal: h === 'B' || h === 'F' ? 'left' : 'center' }, border: true }); });
+                }
+                const lg = 11 + nPC + 1;
+                wsP.getCell('A' + lg).value = 'KETERANGAN KATEGORI:'; gaya(wsP.getCell('A' + lg), { font: { bold: true } });
+                ['D', 'C', 'B', 'A'].forEach((k, i) => { const r = lg + 1 + i; wsP.getCell('A' + r).value = k; gaya(wsP.getCell('A' + r), { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: WARNA[k], align: { horizontal: 'center' }, border: true }); gabung(wsP, `B${r}:E${r}`, PP_INFO[k].jenis + ' - ' + PP_INFO[k].ket + ' (nilai ' + rentang[k] + ')', { font: {}, align: { horizontal: 'left' } }); });
+                const ttd = lg + 7;
+                gabung(wsP, `F${ttd}:G${ttd}`, { formula: `"${KOTA_TTD}, "&TEXT(D7,"DD MMMM YYYY")`, result: KOTA_TTD + ', ' + (tgl ? tglPanjang(s.tanggal) : '') }, { font: {}, align: { horizontal: 'center' } });
+                gabung(wsP, `F${ttd + 1}:G${ttd + 1}`, 'Guru Mata Pelajaran,', { font: {}, align: { horizontal: 'center' } });
+                gabung(wsP, `F${ttd + 4}:G${ttd + 4}`, { formula: 'Dashboard!$D$12', result: guru }, { font: { bold: true }, align: { horizontal: 'center' } });
+
+                // Referensi
+                const wsF = wb.addWorksheet('Referensi');
+                [10, 14, 22, 16].forEach((w, i) => { wsF.getColumn(i + 1).width = w; });
+                ['KATEGORI', 'JENIS', 'KETERANGAN', 'RENTANG NILAI'].forEach((t, i) => { const c = wsF.getCell(1, i + 1); c.value = t; gaya(c, { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: NAVY, align: { horizontal: 'center' }, border: true }); });
+                ['D', 'C', 'B', 'A'].forEach((k, i) => { [k, PP_INFO[k].jenis, PP_INFO[k].ket, rentang[k]].forEach((v, j) => { const c = wsF.getCell(2 + i, 1 + j); c.value = v; gaya(c, { font: { bold: j === 0, color: { argb: j === 0 ? 'FFFFFFFF' : 'FF000000' } }, fill: j === 0 ? WARNA[k] : undefined, align: { horizontal: 'center' }, border: true }); }); });
+
+                const buf = await wb.xlsx.writeBuffer();
+                const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const a = document.createElement('a'); a.href = url; a.download = ('Program_Perbaikan_Pengayaan_' + kelasNm + '_' + D.materi.nama).replace(/[^\w-]+/g, '_') + '.xlsx';
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+                showToast('Excel diunduh.');
+            } catch (e) { console.error(e); showToast('Gagal membuat Excel: ' + e.message, true); }
         }
 
         // === ORBIT DINAMIS: garis mengikuti gerak ikon, mengembang/mengecil saat dashboard buka/tutup ===
