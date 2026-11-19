@@ -1,0 +1,11 @@
+{
+  "versi": "2026.11.19.2",
+  "skema": "2026.11.19.2",
+  "tanggal": "2026-11-19",
+  "catatan": [
+    "Satu file database (supabase_eduverse.sql) menggantikan semua patch.",
+    "Menu Pembaruan Sistem: cek versi & kesehatan sistem, cadangan data, panduan pembaruan.",
+    "CBT Sumatif: token, satu akun satu perangkat, bentuk soal ala TKA, stimulus & gambar, analisis butir, ikrar & refleksi (Kurikulum Berbasis Cinta).",
+    "Daily Journal: tombol Ambil dari Materi & TP mengisi materi sesuai tanggal."
+  ]
+}

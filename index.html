@@ -104,6 +104,8 @@
         button.btn-submit:hover { background: var(--color-dark-blue); }
         button.btn-outline { background: transparent; color: var(--color-purple); border: 1px solid var(--color-purple); padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s;}
         button.btn-outline:hover { background: var(--color-purple); color: white;}
+        a.btn-outline { display: inline-block; color: var(--color-purple); border: 1px solid var(--color-purple); background: transparent; }
+        a.btn-outline:hover { background: var(--color-purple); color: white; }
         button.btn-export { background: #10b981; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;}
         button.btn-export:hover { background: #059669; }
 
@@ -427,8 +429,10 @@
                             ${stat(sis, 'Siswa', 'var(--color-blue)')}
                             ${stat(jam, 'Jam Mengajar', '#16a34a')}
                         </div>
+                        ${htmlBannerPembaruan()}
                         ${hariIniHtml}
-                        <button class="btn-submit" style="margin-top:16px;" onclick="loadContent('kelola')">⚙️ Kelola Kelas &amp; Siswa</button>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;"><button class="btn-submit" style="flex:2; min-width:200px;" onclick="loadContent('kelola')">⚙️ Kelola Kelas &amp; Siswa</button><button class="btn-outline" style="flex:1; min-width:170px;" onclick="loadContent('pembaruan')">🛠️ Pembaruan Sistem${window.infoPembaruan && window.infoPembaruan.perluTindakan ? ' <span style="color:#dc2626;">●</span>' : ''}</button></div>
+                        <p style="text-align:center; font-size:0.72rem; color:var(--text-muted); margin-top:10px;">EDUVERSE versi ${APP_VERSI}</p>
                     `;
                 }
             },
@@ -650,6 +654,10 @@
                         </div>
                     `;
                 }
+            },
+            pembaruan: {
+                url: "Dashboard / Pembaruan Sistem",
+                getHtml: () => htmlPembaruan()
             },
             kelola: {
                 url: "Dashboard / Kelola Kelas & Siswa",
@@ -874,7 +882,7 @@
 
         // === KUNCI MENU: hanya Modul (MPI) terbuka untuk murid ===
         const GURU_PIN = '123456'; // GANTI PIN INI
-        const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai', 'kelola'];
+        const GURU_MENUS = ['home', 'absen', 'jurnal', 'nilai', 'kelola', 'pembaruan'];
         let guruAuth = false;
         let pendingMenu = null;
         if (!sb) { try { guruAuth = sessionStorage.getItem('guruAuth') === '1'; } catch (e) {} }
@@ -920,6 +928,7 @@
                 if (!sb) { try { sessionStorage.setItem('guruAuth', '1'); } catch (e) {} }
                 applyGuruMode();
                 perbaruiTitik();
+                cekPembaruanSenyap();
                 const target = pendingMenu || 'home';
                 closePin();
                 showToast('Mode guru aktif. Selamat datang' + (window.guruNama ? ', ' + window.guruNama : '') + '!');
@@ -942,7 +951,11 @@
         }
         if (sb) {
             sb.auth.getSession().then(async ({ data }) => {
-                if (data.session && await cekGuru(data.session.user)) { guruAuth = true; applyGuruMode(); perbaruiTitik(); }
+                if (data.session && await cekGuru(data.session.user)) {
+                    guruAuth = true; applyGuruMode(); perbaruiTitik();
+                    let buka = null; try { buka = sessionStorage.getItem('eduverse_buka_setelah_muat'); sessionStorage.removeItem('eduverse_buka_setelah_muat'); } catch (e) {}
+                    if (buka) renderContent(buka); else cekPembaruanSenyap();
+                }
             });
         }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePin(); });
@@ -970,6 +983,175 @@
                 }
                 if (menu === 'infokelas') { const dd = document.getElementById('dot-info'); if (dd) dd.style.display = 'none'; }
             }
+        }
+
+        // === PEMBARUAN SISTEM ===
+        // Saat merilis versi baru: naikkan APP_VERSI (dan SKEMA_DIBUTUHKAN bila SQL berubah),
+        // perbarui CATATAN_VERSI, lalu unggah index.html, supabase_eduverse.sql, dan versi.json ke GitHub.
+        const APP_VERSI = '2026.11.19.2';
+        const SKEMA_DIBUTUHKAN = '2026.11.19.2';
+        const CATATAN_VERSI = [
+            'Satu file database (supabase_eduverse.sql) menggantikan semua patch.',
+            'Menu Pembaruan Sistem: cek versi & kesehatan sistem, cadangan data, panduan pembaruan.',
+            'CBT Sumatif: token, satu akun satu perangkat, bentuk soal ala TKA, stimulus & gambar, analisis butir, ikrar & refleksi (Kurikulum Berbasis Cinta).',
+            'Daily Journal: tombol Ambil dari Materi & TP mengisi materi sesuai tanggal.'
+        ];
+        const FILE_SQL = 'supabase_eduverse.sql';
+        function bandingVersi(a, b) {
+            const x = String(a || '0').split(/[.-]/).map(n => parseInt(n, 10) || 0), y = String(b || '0').split(/[.-]/).map(n => parseInt(n, 10) || 0);
+            for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return Math.sign(d); }
+            return 0;
+        }
+        const masalahSistem = (c) => c ? ['tabel_kurang', 'fungsi_kurang', 'fungsi_ganda', 'fungsi_lama', 'rls_mati', 'bucket_kurang'].reduce((a, k) => a + ((c[k] || []).length), 0) : 0;
+        // Memeriksa: versi aplikasi yang terbuka, versi yang sudah diunggah (versi.json), dan versi + kesehatan database.
+        async function cekPembaruan() {
+            const H = { app: APP_VERSI, server: null, catatanServer: null, db: null, cek: null, galatDb: null, adaFileVersi: false };
+            try {
+                const r = await fetch('versi.json?t=' + Date.now(), { cache: 'no-store' });
+                if (r.ok) { const j = await r.json(); H.server = j.versi || null; H.catatanServer = j.catatan || null; H.adaFileVersi = true; }
+            } catch (e) { /* dibuka dari file lokal atau versi.json belum diunggah */ }
+            if (sb && guruAuth) {
+                const { data, error } = await sb.rpc('sistem_cek');
+                if (error) H.galatDb = error.message; else { H.cek = data; H.db = data.versi || null; }
+            }
+            H.masalah = masalahSistem(H.cek);
+            H.perluDb = !!sb && (!H.cek || !H.db || bandingVersi(H.db, SKEMA_DIBUTUHKAN) < 0 || H.masalah > 0);
+            H.perluMuatUlang = !!H.server && bandingVersi(H.server, APP_VERSI) > 0;
+            H.appTertinggal = !!H.db && bandingVersi(H.db, SKEMA_DIBUTUHKAN) > 0 && !H.perluMuatUlang;
+            H.perluTindakan = H.perluDb || H.perluMuatUlang || H.appTertinggal;
+            H.waktu = Date.now();
+            window.infoPembaruan = H;
+            return H;
+        }
+        function htmlBannerPembaruan() {
+            const H = window.infoPembaruan;
+            if (!H || !H.perluTindakan) return '';
+            const teks = H.perluMuatUlang ? 'Versi aplikasi baru (' + esc(H.server) + ') sudah tersedia.' : H.perluDb ? (H.masalah ? 'Pemeriksaan sistem menemukan ' + H.masalah + ' masalah pada database.' : 'Database perlu diperbarui ke versi ' + SKEMA_DIBUTUHKAN + '.') : 'Database lebih baru daripada aplikasi ini; unggah index.html terbaru.';
+            return `<div style="padding:12px 14px; border-radius:10px; background:#fef3c7; color:#92400e; margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;"><span>🛠️ ${teks}</span><button class="btn-outline" style="border-color:#92400e; color:#92400e;" onclick="loadContent('pembaruan')">Buka Pembaruan Sistem</button></div>`;
+        }
+        const refProyek = () => { const m = String(SUPABASE_URL).match(/^https:\/\/([a-z0-9]+)\.supabase\.co/i); return m ? m[1] : null; };
+        async function htmlPembaruan() {
+            const judul = '<h2 class="view-title">🛠️ Pembaruan Sistem</h2>';
+            const H = await cekPembaruan();
+            const kotak = 'padding:14px; border:1px solid var(--browser-border); border-radius:10px; margin-bottom:14px; background:var(--card-bg);';
+            const kartu = (lb, v, ket, warna) => `<div style="flex:1; min-width:150px; padding:12px; border-radius:10px; border:1px solid var(--browser-border); background:var(--browser-bg);"><div style="font-size:0.75rem; color:var(--text-muted);">${lb}</div><div style="font-size:1.05rem; font-weight:800; color:${warna || 'var(--text-main)'};">${v}</div><div style="font-size:0.72rem; color:var(--text-muted);">${ket || ''}</div></div>`;
+            const sehat = !H.perluTindakan;
+            const status = sehat
+                ? '<div style="padding:12px 14px; border-radius:10px; background:#dcfce7; color:#166534; margin-bottom:14px;">✅ <b>Semua mutakhir.</b> Aplikasi dan database sesuai, dan pemeriksaan sistem tidak menemukan masalah.</div>'
+                : `<div style="padding:12px 14px; border-radius:10px; background:#fef3c7; color:#92400e; margin-bottom:14px;">⚠️ <b>Perlu tindakan.</b> Ikuti langkah di bawah dari atas ke bawah.</div>`;
+            const vServer = H.adaFileVersi ? esc(H.server || '-') : 'tidak terbaca';
+            const vDb = H.galatDb ? (/sistem_cek/.test(H.galatDb) || /function/i.test(H.galatDb) ? 'versi lama' : 'tidak terbaca') : esc(H.db || 'belum tercatat');
+            const kartuHtml = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                ${kartu('Aplikasi yang sedang dibuka', esc(APP_VERSI), 'butuh database ' + SKEMA_DIBUTUHKAN)}
+                ${kartu('Aplikasi di server (versi.json)', vServer, H.adaFileVersi ? (H.perluMuatUlang ? 'lebih baru — muat ulang' : 'sama') : 'unggah versi.json bersama index.html', H.perluMuatUlang ? '#b45309' : '')}
+                ${kartu('Database (Supabase)', vDb, H.perluDb ? 'perlu diperbarui' : (H.appTertinggal ? 'lebih baru dari aplikasi' : 'sesuai'), H.perluDb ? '#b91c1c' : '#16a34a')}</div>`;
+            // langkah-langkah
+            const ref = refProyek(), linkSql = ref ? `https://supabase.com/dashboard/project/${ref}/sql/new` : 'https://supabase.com/dashboard/projects';
+            const langkah = (no, judulL, aktif, isi) => `<div style="${kotak}${aktif ? ' border-color:var(--color-blue); border-width:2px;' : ' opacity:0.85;'}"><div style="display:flex; gap:10px; align-items:flex-start;"><div style="min-width:28px; height:28px; border-radius:50%; background:${aktif ? 'var(--color-blue)' : 'var(--browser-border)'}; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800;">${no}</div><div style="flex:1;"><b>${judulL}</b>${isi}</div></div></div>`;
+            const l1 = langkah(1, 'Cadangkan data', H.perluDb, `<p style="font-size:0.82rem; color:var(--text-muted); margin:4px 0 8px;">Simpan salinan semua data sebelum memperbarui database. File berisi data siswa dan nilai, jadi simpan di tempat yang aman. Gambar soal dan foto tidak ikut.</p><div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn-outline" onclick="unduhCadangan('json')">⬇️ Cadangan lengkap (.json)</button><button class="btn-outline" onclick="unduhCadangan('xlsx')">⬇️ Cadangan Excel (.xlsx)</button></div><div id="cadangan-status" style="font-size:0.8rem; margin-top:6px; color:var(--text-muted);"></div>`);
+            const l2 = langkah(2, 'Perbarui database', H.perluDb, `<p style="font-size:0.82rem; color:var(--text-muted); margin:4px 0 8px;">${H.perluDb ? 'Salin isi <code>' + FILE_SQL + '</code>, buka SQL Editor Supabase, tempel, lalu klik <b>Run</b>. File ini aman dijalankan berulang kali dan tidak menghapus data.' : 'Database sudah sesuai. Langkah ini dapat dilewati.'}</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn-outline" onclick="salinSqlPembaruan()">📋 Salin SQL</button><a class="btn-outline" style="text-decoration:none; padding:8px 15px; border-radius:6px; font-weight:bold; font-size:0.85rem;" href="${linkSql}" target="_blank" rel="noopener">↗ Buka SQL Editor Supabase</a><a class="btn-outline" style="text-decoration:none; padding:8px 15px; border-radius:6px; font-weight:bold; font-size:0.85rem;" href="${FILE_SQL}" download>⬇️ Unduh SQL</a></div>
+                <div id="sql-cadangan"></div>`);
+            const l3 = langkah(3, 'Periksa hasilnya', H.perluDb, `<p style="font-size:0.82rem; color:var(--text-muted); margin:4px 0 8px;">Setelah SQL berhasil dijalankan, periksa lagi. Bila semua hijau, pembaruan database selesai.</p><button class="btn-submit" style="max-width:240px;" onclick="renderContent('pembaruan')">🔄 Periksa Lagi</button>`);
+            const l4 = langkah(4, 'Muat versi aplikasi terbaru', H.perluMuatUlang || H.appTertinggal, H.perluMuatUlang
+                ? `<p style="font-size:0.82rem; margin:4px 0 8px;">Versi <b>${esc(H.server)}</b> sudah diunggah, tetapi browser ini masih memakai ${esc(APP_VERSI)}.</p>${(H.catatanServer || []).length ? `<ul style="font-size:0.82rem; margin:0 0 8px 18px;">${H.catatanServer.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}<button class="btn-submit" style="max-width:260px;" onclick="muatVersiBaru('${esc(H.server)}')">🔄 Muat Ulang ke Versi Baru</button><p style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Siswa yang sedang mengerjakan tes tidak terpengaruh; mereka mendapat versi baru saat membuka ulang halaman.</p>`
+                : H.appTertinggal ? `<p style="font-size:0.82rem; margin:4px 0;">Database sudah versi <b>${esc(H.db)}</b>, sedangkan aplikasi ini ${esc(APP_VERSI)}. Unggah <code>index.html</code> dan <code>versi.json</code> terbaru ke GitHub, lalu muat ulang halaman.</p>`
+                : '<p style="font-size:0.82rem; color:var(--text-muted); margin:4px 0;">Aplikasi ini sudah versi terbaru yang diunggah.</p>');
+            // pemeriksaan kesehatan
+            let kesehatan;
+            if (!sb) kesehatan = '<p style="font-size:0.85rem; color:var(--text-muted);">Aplikasi berjalan tanpa Supabase (mode demo).</p>';
+            else if (!H.cek) kesehatan = `<p style="font-size:0.85rem; color:#b91c1c;">Pemeriksaan belum dapat dijalankan${H.galatDb ? ' (' + esc(H.galatDb) + ')' : ''}. Biasanya karena database masih versi lama: jalankan langkah 2.</p>`;
+            else {
+                const C = H.cek, baris = (lb, arr, ok, saran) => `<div style="display:flex; gap:8px; padding:5px 0; border-bottom:1px solid var(--browser-border); font-size:0.85rem;"><span style="min-width:18px;">${arr.length ? '❌' : '✅'}</span><span style="flex:1;">${lb}${arr.length ? `: <b>${arr.map(esc).join(', ')}</b><br><small style="color:var(--text-muted);">${saran}</small>` : ` <small style="color:var(--text-muted);">${ok}</small>`}</span></div>`;
+                kesehatan = baris('Tabel', C.tabel_kurang || [], C.jumlah_tabel + ' tabel lengkap', 'Tabel belum ada. Jalankan langkah 2.')
+                    + baris('Fungsi', C.fungsi_kurang || [], C.jumlah_fungsi + ' fungsi lengkap', 'Fungsi belum ada. Jalankan langkah 2.')
+                    + baris('Fungsi versi lama', C.fungsi_lama || [], 'tidak ada', 'Biasanya karena patch lama dijalankan ulang. Jalankan langkah 2 untuk memulihkan.')
+                    + baris('Fungsi ganda', C.fungsi_ganda || [], 'tidak ada', 'Ada beberapa versi fungsi yang sama. Jalankan langkah 2 untuk membersihkannya.')
+                    + baris('Keamanan baris (RLS)', C.rls_mati || [], 'aktif di semua tabel', 'RLS mati: data tabel ini bisa terbuka. Jalankan langkah 2 segera.')
+                    + baris('Penyimpanan berkas', C.bucket_kurang || [], 'bucket foto & soal tersedia', 'Bucket belum ada. Jalankan langkah 2.');
+            }
+            const riwayat = H.cek && (H.cek.riwayat || []).length ? `<ul style="font-size:0.82rem; margin-left:18px; line-height:1.6;">${H.cek.riwayat.map(r => `<li>${esc(r.versi)} — ${new Date(r.pada).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</li>`).join('')}</ul>` : '<p style="font-size:0.82rem; color:var(--text-muted);">Belum ada catatan.</p>';
+            const panduan = `<details style="${kotak}"><summary style="cursor:pointer; font-weight:700;">📦 Cara mengunggah versi baru ke GitHub Pages</summary><ol style="font-size:0.85rem; margin:10px 0 0 20px; line-height:1.7;">
+                <li>Buka repositori aplikasi di github.com, lalu <b>Add file → Upload files</b>.</li>
+                <li>Seret tiga file sekaligus: <code>index.html</code>, <code>${FILE_SQL}</code>, dan <code>versi.json</code>. Nama file harus persis sama agar menimpa file lama.</li>
+                <li>Isi pesan singkat (mis. "Versi 2026.11.20"), lalu <b>Commit changes</b>.</li>
+                <li>Tunggu 1–2 menit, buka menu ini lagi, lalu ikuti langkah 1–4 di atas.</li></ol>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">Sebaiknya perbarui di luar jadwal ujian CBT, mis. sore hari.</p></details>`;
+            return judul + status + kartuHtml + l1 + l2 + l3 + l4
+                + `<div style="${kotak}"><b>🩺 Pemeriksaan Sistem</b><div style="margin-top:8px;">${kesehatan}</div></div>`
+                + `<div style="${kotak}"><b>🕘 Riwayat pembaruan database</b>${riwayat}</div>`
+                + `<div style="${kotak}"><b>📝 Yang baru di versi ${esc(APP_VERSI)}</b><ul style="font-size:0.82rem; margin:6px 0 0 18px; line-height:1.6;">${CATATAN_VERSI.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+                + panduan;
+        }
+        async function salinSqlPembaruan() {
+            let teks;
+            try {
+                const r = await fetch(FILE_SQL + '?t=' + Date.now(), { cache: 'no-store' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                teks = await r.text();
+                if (!teks.includes('EDUVERSE')) throw new Error('isi file tidak dikenali');
+            } catch (e) {
+                showToast('Tidak dapat mengambil ' + FILE_SQL + ' dari situs (' + e.message + '). Pastikan file itu diunggah ke folder yang sama dengan index.html.', true);
+                return;
+            }
+            const m = (teks.match(/Versi skema:\s*([0-9.]+)/) || [])[1];
+            if (m && bandingVersi(m, SKEMA_DIBUTUHKAN) < 0) showToast('Perhatian: ' + FILE_SQL + ' di server masih versi ' + m + ', lebih lama dari yang dibutuhkan (' + SKEMA_DIBUTUHKAN + '). Unggah file terbaru.', true);
+            try {
+                await navigator.clipboard.writeText(teks);
+                showToast('SQL disalin (' + teks.split('\n').length + ' baris). Buka SQL Editor, tempel (Ctrl+V), lalu Run.');
+            } catch (e) {
+                // cadangan bila browser menolak akses papan klip: tampilkan teks untuk disalin manual
+                const box = document.getElementById('sql-cadangan');
+                if (box) { box.innerHTML = `<p style="font-size:0.8rem; margin:8px 0 4px;">Browser menolak menyalin otomatis. Teks sudah dipilih — tekan Ctrl+C (atau tahan lalu Salin):</p><textarea id="sql-teks" rows="6" readonly style="font-family:monospace; font-size:0.75rem;"></textarea>`; const ta = document.getElementById('sql-teks'); ta.value = teks; ta.focus(); ta.select(); }
+            }
+        }
+        function muatVersiBaru(v) {
+            try { sessionStorage.setItem('eduverse_buka_setelah_muat', 'pembaruan'); } catch (e) {}
+            location.href = location.pathname + '?v=' + encodeURIComponent(v);
+        }
+        // Cadangan data: semua tabel yang dapat dibaca guru, diunduh sebagai JSON atau Excel.
+        const TABEL_CADANGAN = [['guru', 'user_id'], ['kelas', 'id'], ['siswa', 'id'], ['jam_pelajaran', 'jam_ke'], ['jadwal', 'id'], ['pengumuman', 'id'], ['tugas', 'id'],
+            ['absensi', 'id'], ['jurnal', 'id'], ['materi', 'id'], ['tp', 'id'], ['nilai_formatif', 'siswa_id,tp_id'], ['nilai_sumatif', 'siswa_id,materi_id'],
+            ['pp_sesi', 'kelas_id,materi_id'], ['nilai_sas', 'siswa_id,semester'], ['stimulus', 'id'], ['soal_bank', 'id'], ['cbt_tes', 'id'],
+            ['cbt_tes_kelas', 'tes_id,kelas_id'], ['cbt_tes_soal', 'tes_id,soal_id'], ['cbt_sesi', 'id'], ['cbt_jawaban', 'sesi_id,soal_id'],
+            ['cbt_hasil_materi', 'sesi_id,materi_id'], ['cbt_hasil_tp', 'sesi_id,tp_id']];
+        async function unduhCadangan(format) {
+            if (!sb) { showToast('Cadangan membutuhkan koneksi Supabase.', true); return; }
+            if (format === 'xlsx' && typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
+            const st = document.getElementById('cadangan-status'), tulis = (t) => { if (st) st.textContent = t; };
+            const data = {}, lewat = [];
+            for (let i = 0; i < TABEL_CADANGAN.length; i++) {
+                const [t, urut] = TABEL_CADANGAN[i];
+                tulis('Mengambil ' + t + ' (' + (i + 1) + '/' + TABEL_CADANGAN.length + ')…');
+                try {
+                    data[t] = await ambilSemua(() => { let q = sb.from(t).select('*'); urut.split(',').forEach(c => { q = q.order(c); }); return q; });
+                } catch (e) { lewat.push(t); }
+            }
+            const jml = Object.values(data).reduce((a, r) => a + r.length, 0);
+            const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+            const nama = 'Cadangan_EDUVERSE_' + stamp;
+            if (format === 'json') {
+                const isi = JSON.stringify({ aplikasi: 'EDUVERSE', versi_aplikasi: APP_VERSI, versi_database: (window.infoPembaruan || {}).db || null, dibuat: new Date().toISOString(), sekolah: NAMA_SEKOLAH, tabel: data }, null, 1);
+                const url = URL.createObjectURL(new Blob([isi], { type: 'application/json' }));
+                const a = document.createElement('a'); a.href = url; a.download = nama + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+            } else {
+                const wb = XLSX.utils.book_new();
+                Object.keys(data).forEach(t => {
+                    const rows = data[t].map(r => { const o = {}; Object.keys(r).forEach(k => { const v = r[k]; o[k] = v !== null && typeof v === 'object' ? JSON.stringify(v) : v; }); return o; });
+                    XLSX.utils.book_append_sheet(wb, rows.length ? XLSX.utils.json_to_sheet(rows) : XLSX.utils.aoa_to_sheet([['(kosong)']]), t.slice(0, 31));
+                });
+                XLSX.writeFile(wb, nama + '.xlsx');
+            }
+            tulis('✔ Cadangan diunduh: ' + jml + ' baris dari ' + Object.keys(data).length + ' tabel' + (lewat.length ? '. Dilewati (belum ada di database): ' + lewat.join(', ') : '') + '.');
+            showToast('Cadangan diunduh (' + jml + ' baris).');
+        }
+        // Pemeriksaan otomatis setelah guru masuk; hasilnya tampil sebagai banner di dashboard.
+        async function cekPembaruanSenyap() {
+            try {
+                const H = await cekPembaruan();
+                if (H.perluTindakan) showToast(H.perluMuatUlang ? 'Versi aplikasi baru tersedia. Buka menu Pembaruan Sistem.' : 'Sistem perlu diperbarui. Buka menu Pembaruan Sistem di dashboard.', true);
+                if (window.menuAktif === 'home') renderContent('home');
+            } catch (e) { /* abaikan */ }
         }
 
         function muatUlangData() {
