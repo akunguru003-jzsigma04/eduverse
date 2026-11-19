@@ -335,7 +335,7 @@
             </div>
             <div class="browser-nav">
                 <span id="browser-url">https://eduverse.id/dashboard</span>
-                <span class="sync-btn" style="cursor:pointer;" onclick="showToast('Memproses sinkronisasi data...', false)">🔄 Sinkronisasi</span>
+                <span class="sync-btn" style="cursor:pointer;" onclick="muatUlangData()" title="Muat ulang data dari server">🔄 Muat Ulang Data</span>
             </div>
             <div class="browser-content" id="app-content"></div>
         </div>
@@ -379,30 +379,27 @@
             setTimeout(() => toast.classList.remove('show'), isWarning ? 5000 : 3000);
         }
 
-        function laporAlpa(nama) {
-            showToast(`Peringatan: ${nama} terdeteksi Alpa beruntun! Surat Panggilan Orang Tua otomatis di-draft.`, true);
+
+        // Mengisi jurnal dari MPI: materi yang periodenya mencakup tanggal jurnal, beserta daftar TP-nya.
+        async function syncRPP() {
+            const st = window.jurnalState;
+            if (!sb) { showToast('Fitur ini membutuhkan koneksi Supabase.', true); return; }
+            if (!st || !st.kelasId) { showToast('Pilih kelas dahulu.', true); return; }
+            const kr = await sb.from('kelas').select('nama').eq('id', st.kelasId).maybeSingle();
+            const tk = tingkatDari(kr.data && kr.data.nama);
+            if (!tk) { showToast('Nama kelas harus diawali X, XI, atau XII agar materinya dikenali.', true); return; }
+            const mt = await sb.from('materi').select('id, nama, tanggal_mulai, tanggal_selesai').eq('tingkat', tk).order('urutan');
+            if (mt.error) { showToast('Gagal memuat materi: ' + mt.error.message, true); return; }
+            const tgl = st.tanggal, m = mt.data.find(x => x.tanggal_mulai && x.tanggal_selesai && x.tanggal_mulai <= tgl && tgl <= x.tanggal_selesai);
+            if (!m) { showToast('Belum ada materi Kelas ' + tk + ' yang periodenya mencakup ' + fTgl(tgl) + '. Atur periode di MPI → Materi & TP.', true); return; }
+            const tp = await sb.from('tp').select('id, urutan, deskripsi').eq('materi_id', m.id).order('urutan').order('id');
+            document.getElementById('jurnal-topik').value = m.nama;
+            const keg = document.getElementById('jurnal-kegiatan');
+            if (keg && !keg.value.trim() && tp.data && tp.data.length) keg.value = 'Tujuan pembelajaran:\n' + tp.data.map((t, i) => 'TP' + (i + 1) + '. ' + t.deskripsi).join('\n');
+            showToast('Materi diambil dari MPI: ' + m.nama + (keg && tp.data && tp.data.length ? ' (beserta TP)' : ''));
         }
 
-        function syncRPP() {
-            document.getElementById('jurnal-topik').value = "Fungsi Kuadrat dan Grafiknya";
-            document.getElementById('jurnal-catatan').value = "Pendekatan berdiferensiasi: siswa visual memakai GeoGebra, siswa auditori berdiskusi kelompok.";
-            showToast("Berhasil mengambil data dari ATP/Modul Ajar!");
-        }
 
-        function switchJurnalTab(tabName) {
-            document.getElementById('tab-intra').style.display = tabName === 'intra' ? 'block' : 'none';
-            document.getElementById('tab-p5').style.display = tabName === 'p5' ? 'block' : 'none';
-            document.getElementById('btn-intra').classList.toggle('active', tabName === 'intra');
-            document.getElementById('btn-p5').classList.toggle('active', tabName === 'p5');
-        }
-
-        // Mock function untuk Export Excel
-        function exportToExcel() {
-            showToast("Menyiapkan file Rekap_Nilai_XMIPA1.xlsx...");
-            setTimeout(() => {
-                showToast("File Excel berhasil diunduh! Siap diunggah ke Rapor Digital.");
-            }, 1500);
-        }
 
         // === DATA KONTEN SPA ===
         const appData = {
@@ -551,7 +548,7 @@
                             sb.from('jurnal').select('pertemuan, materi, kegiatan, kokurikuler, refleksi').eq('kelas_id', st.kelasId).eq('tanggal', st.tanggal).maybeSingle(),
                             sb.from('jurnal').select('pertemuan').eq('kelas_id', st.kelasId).not('pertemuan', 'is', null).order('pertemuan', { ascending: false }).limit(1)
                         ]);
-                        if (a.error) peringatan = '<div style="padding:10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.85rem; margin-bottom:10px;">Jalankan supabase_patch_6.sql di Supabase agar nomor pertemuan dapat disimpan.</div>';
+                        if (a.error) peringatan = '<div style="padding:10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.85rem; margin-bottom:10px;">Jalankan supabase_eduverse.sql di Supabase agar nomor pertemuan dapat disimpan.</div>';
                         j = a.data;
                         nextP = ((b.data && b.data[0] && b.data[0].pertemuan) || 0) + 1;
                     }
@@ -571,7 +568,7 @@
                         <div style="${kotak}">
                             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
                                 <h3 style="${h3} margin-bottom:0;">📘 Intrakurikuler</h3>
-                                <button class="btn-outline" onclick="syncRPP()">🔄 Ambil dari ATP/Modul</button>
+                                <button class="btn-outline" onclick="syncRPP()" title="Mengisi materi dan TP dari MPI sesuai tanggal jurnal">📘 Ambil dari Materi &amp; TP</button>
                             </div>
                             <div class="form-group"><label>Materi</label><input type="text" id="jurnal-topik" value="${v('materi')}" placeholder="Materi pertemuan ini"></div>
                             <div class="form-group" style="margin-bottom:0;"><label>Kegiatan Pembelajaran</label><textarea id="jurnal-kegiatan" rows="2">${v('kegiatan')}</textarea></div>
@@ -593,14 +590,14 @@
                     if (!sb) return judul + '<p style="color:var(--text-muted);">Daftar Nilai membutuhkan koneksi Supabase. Isi kunci <b>anon</b> di <code>index.html</code>, lalu buka dari GitHub Pages.</p>';
                     const st = (window.nilaiState = window.nilaiState || { tab: 'input' });
                     if (st.tab === 'cbt') return judul + tabNilai(st) + await htmlCbtGuru();
-                    if (st.tab === 'pp') { try { return judul + tabNilai(st) + await htmlPP(); } catch (e) { return judul + tabNilai(st) + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_patch_13.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; } }
+                    if (st.tab === 'pp') { try { return judul + tabNilai(st) + await htmlPP(); } catch (e) { return judul + tabNilai(st) + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_eduverse.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; } }
                     const kr = await sb.from('kelas').select('id, nama').order('nama');
                     if (kr.error) return judul + '<p style="color:#b91c1c;">Gagal memuat data. Periksa koneksi, lalu coba lagi.</p>';
                     if (!kr.data.length) return judul + '<p style="color:var(--text-muted);">Belum ada kelas. Tambahkan di Kelola Kelas &amp; Siswa.</p>';
                     if (!kr.data.some(k => k.id === st.kelasId)) st.kelasId = kr.data[0].id;
                     let d;
                     st.semester = st.semester || semesterSaatIni();
-                    try { d = await muatNilai(st.kelasId, st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat nilai. Pastikan supabase_patch_4.sql sudah dijalankan.</p>'; }
+                    try { d = await muatNilai(st.kelasId, st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat nilai. Pastikan supabase_eduverse.sql sudah dijalankan.</p>'; }
                     window.nilaiD = d;
                     const opsiKelas = kr.data.map(k => `<option value="${k.id}" ${k.id === st.kelasId ? 'selected' : ''}>${esc(k.nama)}</option>`).join('');
                     if (!d.materi.length) return judul + tabNilai(st) + `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"><select onchange="ubahNilai('kelasId', this.value)" style="flex:1; min-width:120px;">${opsiKelas}</select><select onchange="ubahNilai('semester', this.value)" style="flex:1; min-width:120px;">${semesterOpsi(st.semester)}</select></div><p style="color:var(--text-muted);">${d.tingkat ? 'Belum ada materi Kelas ' + d.tingkat + ' pada semester ini.' : 'Nama kelas harus diawali X, XI, atau XII agar materinya dikenali.'} Atur Materi &amp; TP di menu Modul (MPI), tab Materi &amp; TP.</p>`;
@@ -778,7 +775,7 @@
                     const st = (window.jadwalState = window.jadwalState || {});
                     st.semester = st.semester || semesterSaatIni();
                     let data;
-                    try { data = await ambilJadwalData(st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat jadwal. Jalankan supabase_patch_7.sql di Supabase.</p>'; }
+                    try { data = await ambilJadwalData(st.semester); } catch (e) { return judul + '<p style="color:#b91c1c;">Gagal memuat jadwal. Jalankan supabase_eduverse.sql di Supabase.</p>'; }
                     const kelasAda = Object.keys(data.nama).sort((a, b) => data.nama[a].localeCompare(data.nama[b], 'id', { numeric: true }));
                     if (st.kelasId === undefined) st.kelasId = guruAuth ? '' : (kelasAda[0] || '');
                     if (st.kelasId && !data.nama[st.kelasId]) st.kelasId = '';
@@ -957,6 +954,7 @@
 
         function renderContent(menu) {
             if(appData[menu]) {
+                window.menuAktif = menu;
                 document.querySelector('.portal-wrapper').classList.add('open');
                 urlArea.innerHTML = appData[menu].url;
                 contentArea.style.animation = 'none'; contentArea.offsetHeight; 
@@ -974,6 +972,15 @@
             }
         }
 
+        function muatUlangData() {
+            const m = window.menuAktif || 'home';
+            if (m === 'cbtujian' || m === 'cbtikrar' || m === 'gamefokus') return;
+            window.jadwalCache = null; window.pengingatCache = null;
+            renderContent(m);
+            perbaruiTitik();
+            showToast('Data dimuat ulang dari server.');
+        }
+
         // === KELOLA DATA (guru) ===
         async function kelolaAksi(promise, pesanOk) {
             const { error } = await promise;
@@ -987,7 +994,7 @@
             const { data: { user } } = await sb.auth.getUser();
             const { data, error } = await sb.from('guru').update({ nama }).eq('user_id', user.id).select();
             if (error) { showToast('Gagal: ' + error.message, true); return; }
-            if (!data.length) { showToast('Belum diizinkan. Jalankan supabase_patch_1.sql di SQL Editor Supabase.', true); return; }
+            if (!data.length) { showToast('Belum diizinkan. Jalankan supabase_eduverse.sql di SQL Editor Supabase.', true); return; }
             window.guruNama = nama;
             showToast('Nama guru disimpan.');
             renderContent('kelola');
@@ -1043,7 +1050,7 @@
                 target.push({ ...isi, pertemuan: await pertemuanUntuk(cb.value, st.tanggal), kelas_id: cb.value, tanggal: st.tanggal, jenis: 'harian' });
             }
             const { error } = await sb.from('jurnal').upsert(target, { onConflict: 'kelas_id,tanggal' });
-            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_2 dan supabase_patch_6)', true); return; }
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             window.pengingatCache = null; perbaruiTitik();
             showToast(target.length > 1 ? 'Jurnal tersimpan untuk ' + target.length + ' kelas.' : 'Jurnal tersimpan.');
             renderContent('jurnal');
@@ -1052,7 +1059,7 @@
             if (!sb) return '<p style="color:var(--text-muted);">Riwayat membutuhkan koneksi Supabase.</p>';
             if (!st.kelasId) return '<p style="color:var(--text-muted);">Belum ada kelas.</p>';
             const jr = await sb.from('jurnal').select('tanggal, pertemuan, materi').eq('kelas_id', st.kelasId).order('pertemuan', { ascending: true, nullsFirst: false }).order('tanggal');
-            if (jr.error) return '<p style="color:#b91c1c;">Gagal memuat riwayat. Jalankan supabase_patch_6.sql di Supabase.</p>';
+            if (jr.error) return '<p style="color:#b91c1c;">Gagal memuat riwayat. Jalankan supabase_eduverse.sql di Supabase.</p>';
             const sw = await sb.from('siswa').select('id').eq('kelas_id', st.kelasId);
             const ids = (sw.data || []).map(x => x.id), tgls = jr.data.map(r => r.tanggal).sort();
             const ringkas = {};
@@ -1232,12 +1239,12 @@
             }
             if (rows.length) {
                 const { error } = await sb.from('absensi').upsert(rows, { onConflict: 'siswa_id,tanggal' });
-                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan ulang supabase_patch_3.sql bila status ditolak)', true); return; }
+                if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan ulang supabase_eduverse.sql bila status ditolak)', true); return; }
             }
             const pt = parseInt(document.getElementById('ab-pert')?.value, 10), mt = (document.getElementById('ab-materi')?.value || '').trim();
             if (pt || mt) {
                 const { error } = await sb.from('jurnal').upsert({ kelas_id: st.kelasId, tanggal: st.tanggal, pertemuan: pt || null, materi: mt || null, jenis: 'harian' }, { onConflict: 'kelas_id,tanggal' });
-                if (error) { showToast('Absensi tersimpan, tetapi pertemuan/materi gagal disimpan (jalankan supabase_patch_6.sql).', true); return; }
+                if (error) { showToast('Absensi tersimpan, tetapi pertemuan/materi gagal disimpan (jalankan supabase_eduverse.sql).', true); return; }
             }
             st.tersimpan = new Set(rows.map(r => r.siswa_id));
             window.pengingatCache = null; perbaruiTitik();
@@ -1316,7 +1323,7 @@
         // --- Nilai Sumatif Akhir Semester (terpisah dari sumatif lingkup materi) ---
         function htmlSas(d) {
             const judul = `<h3 style="color:var(--color-dark-blue); font-size:1rem; margin:20px 0 6px;">🏁 Sumatif Akhir Semester (SAS) — Semester ${esc(d.semester)}</h3>`;
-            if (!d.sasSiap) return judul + '<p style="font-size:0.85rem; color:#b45309;">Jalankan supabase_patch_14.sql agar nilai SAS dapat disimpan.</p>';
+            if (!d.sasSiap) return judul + '<p style="font-size:0.85rem; color:#b45309;">Jalankan supabase_eduverse.sql agar nilai SAS dapat disimpan.</p>';
             const baris = d.siswa.map((x, i) => {
                 const ak = d.materi.map(m => tampilNilai(d, m.id, x.id).akhir).filter(v => v != null);
                 const rata = ak.length ? ak.reduce((a, b) => a + b, 0) / ak.length : null;
@@ -1349,7 +1356,7 @@
             const hasil = val
                 ? await sb.from('nilai_formatif').upsert({ siswa_id: sid, tp_id: tid, predikat: val }, { onConflict: 'siswa_id,tp_id' })
                 : await sb.from('nilai_formatif').delete().eq('siswa_id', sid).eq('tp_id', tid);
-            if (hasil.error) { showToast('Gagal menyimpan: ' + hasil.error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            if (hasil.error) { showToast('Gagal menyimpan: ' + hasil.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             if (val) window.nilaiD.f[sid + '|' + tid] = val; else delete window.nilaiD.f[sid + '|' + tid];
             segarkanBaris(sid);
         }
@@ -1365,7 +1372,7 @@
         }
         async function simpanWali(v) {
             const { error } = await sb.from('kelas').update({ wali_kelas: v.trim() || null }).eq('id', window.nilaiState.kelasId);
-            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             window.nilaiD.kelas.wali_kelas = v.trim();
             showToast('Nama wali kelas disimpan.');
         }
@@ -1429,7 +1436,7 @@
         async function mpiAksi(janji, pesan) {
             const { error } = await janji;
             if (error && error.code === '23503') { showToast('Tidak dapat dihapus: materi ini memiliki soal yang sudah dipakai dalam tes CBT. Hapus tes tersebut dahulu, atau biarkan materi tetap ada.', true); return; }
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_4.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             if (pesan) showToast(pesan);
             renderContent('mpi');
         }
@@ -1438,7 +1445,7 @@
             st.tingkat = st.tingkat || 'X';
             st.semester = st.semester || semesterSaatIni();
             const mt = await sb.from('materi').select('id, nama, elemen, semester, tanggal_mulai, tanggal_selesai').eq('tingkat', st.tingkat).order('urutan').order('nama');
-            if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_patch_4, supabase_patch_9, dan supabase_patch_10 di Supabase.</p>';
+            if (mt.error) return '<p style="color:#b91c1c;">Gagal memuat materi. Jalankan supabase_eduverse.sql di Supabase.</p>';
             const mtSemua = mt.data, tampil = mtSemua.filter(m => m.semester === st.semester), mids = tampil.map(m => m.id);
             const tp = mids.length ? await sb.from('tp').select('id, materi_id, deskripsi').in('materi_id', mids).order('urutan').order('id') : { data: [] };
             const box = 'padding:14px; border:1px solid var(--browser-border); border-radius:8px; margin-bottom:12px; background:var(--card-bg);';
@@ -1694,7 +1701,7 @@
             if (!kelas.length) return '';
             window.kelolaSem = window.kelolaSem || semesterSaatIni();
             let data;
-            try { data = await ambilJadwalData(window.kelolaSem, true); } catch (e) { return `<div style="${box}"><h3 style="${h3}">🗓️ Jadwal Mengajar</h3><p style="color:#b91c1c; font-size:0.85rem;">Gagal memuat. Jalankan supabase_patch_7.sql di Supabase.</p></div>`; }
+            try { data = await ambilJadwalData(window.kelolaSem, true); } catch (e) { return `<div style="${box}"><h3 style="${h3}">🗓️ Jadwal Mengajar</h3><p style="color:#b91c1c; font-size:0.85rem;">Gagal memuat. Jalankan supabase_eduverse.sql di Supabase.</p></div>`; }
             const hari = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat'], slots = Object.keys(data.jam).map(Number).sort((a, b) => a - b);
             const daftar = blokPerKelas(data.rows).sort((a, b) => (data.nama[a.kelas_id] || '').localeCompare(data.nama[b.kelas_id] || '', 'id', { numeric: true }) || a.hari - b.hari || a.dari - b.dari)
                 .map(b => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--browser-border); font-size:0.85rem;"><span><strong>${esc(data.nama[b.kelas_id] || '?')}</strong> · ${hari[b.hari - 1]} · ${data.jam[b.dari] ? data.jam[b.dari].mulai : b.dari}–${data.jam[b.sampai] ? data.jam[b.sampai].selesai : b.sampai} · ${b.jenis}</span><button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusBlokJadwal('${b.ids.join(',')}')">🗑️</button></div>`).join('') || '<p style="font-size:0.85rem; color:var(--text-muted);">Belum ada jadwal pada semester ini.</p>';
@@ -1720,7 +1727,7 @@
             if (!ids.length) { showToast('Centang minimal satu kelas.', true); return; }
             if (sampai < dari) { showToast('Jam selesai harus setelah jam mulai.', true); return; }
             const ada = await sb.from('jadwal').select('kelas_id, jenis').eq('semester', sem).eq('hari', hari).gte('jam_ke', dari).lte('jam_ke', sampai);
-            if (ada.error) { showToast('Gagal: ' + ada.error.message + ' (jalankan supabase_patch_7.sql)', true); return; }
+            if (ada.error) { showToast('Gagal: ' + ada.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             const lain = ada.data.filter(r => !ids.includes(r.kelas_id) && !(jenis === 'Kokurikuler' && r.jenis === 'Kokurikuler'));
             if (lain.length) { const n = window.jadwalCache && window.jadwalCache.data.nama[lain[0].kelas_id]; showToast('Bentrok: jam tersebut sudah dipakai kelas ' + (n || 'lain') + '.', true); return; }
             const rows = [];
@@ -1899,7 +1906,7 @@
                 URL.revokeObjectURL(img.src);
                 const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
                 const { error } = await sb.storage.from('foto').upload('guru.jpg', blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '60' });
-                if (error) { showToast('Gagal mengunggah: ' + error.message + ' (jalankan supabase_patch_8.sql)', true); return; }
+                if (error) { showToast('Gagal mengunggah: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
                 pasangFoto(SUPABASE_URL + '/storage/v1/object/public/foto/guru.jpg?t=' + Date.now());
                 showToast('Foto disimpan.');
                 renderContent('kelola');
@@ -2108,7 +2115,7 @@
         async function lanjutMulai() {
             const m = window.cbtMasuk; if (!m) return;
             const { data, error } = await sb.rpc('cbt_mulai', { p_kode: m.kode, p_nis: m.nis, p_token: m.token, p_perangkat: perangkatId() });
-            if (error) { showToast('Gagal: ' + error.message + ' (guru perlu menjalankan supabase_patch_17.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (guru perlu menjalankan supabase_eduverse.sql)', true); return; }
             if (data.error) { showToast(data.error, true); if (document.getElementById('ikrar-cek')) renderContent('infokelas'); return; }
             if (m.intro && m.intro.ikrar) {
                 try { localStorage.setItem(kunciIkrar(m.kode, m.nis), '1'); } catch (e) {}
@@ -2454,7 +2461,7 @@
                 if (g.tab === 'hasil') return atas + await htmlCbtHasil(g);
                 if (g.tab === 'pantau') return atas + await htmlCbtPantau(g);
                 return atas + await htmlCbtTes(g);
-            } catch (e) { return atas + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_patch_11.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; }
+            } catch (e) { return atas + '<p style="color:#b91c1c;">Gagal memuat. Pastikan supabase_eduverse.sql sudah dijalankan. (' + esc(e.message) + ')</p>'; }
         }
 
         // --- Bank soal ---
@@ -2473,7 +2480,7 @@
                 sb.from('materi').select('id, nama, semester').eq('tingkat', g.tingkat).order('urutan'),
                 sb.from('soal_bank').select('id, tipe, pertanyaan, opsi, kunci, kunci_json, parsial, stimulus_id, gambar_url, panca_cinta, bobot, pembahasan, materi_id, tp_id, level, indikator, stat_p, stat_d, stat_n, diarsip_pada, materi!inner(tingkat)').eq('materi.tingkat', g.tingkat).order('dibuat_pada', { ascending: false })
             ]);
-            if (mt.error || sl.error) throw new Error((mt.error || sl.error).message + ' (jalankan supabase_patch_16.sql)');
+            if (mt.error || sl.error) throw new Error((mt.error || sl.error).message + ' (jalankan supabase_eduverse.sql)');
             const materi = mt.data, semuaSoal = sl.data, soal = semuaSoal.filter(s => !s.diarsip_pada), arsip = semuaSoal.filter(s => s.diarsip_pada);
             window.cbtMateri = materi; window.cbtSoalBank = semuaSoal;
             if (!materi.some(m => m.id === g.materiId)) g.materiId = materi[0] ? materi[0].id : null;
@@ -2526,7 +2533,7 @@
             const bentuk = { PG: 'PG', PGK: 'PGK', KATEGORI: 'Kategori', ISIAN: 'Isian' };
             return selTingkatSem(g) + `
                 <select onchange="ubahCbt('materiId', this.value)" style="margin-bottom:12px;">${materi.map(m => `<option value="${m.id}" ${m.id === g.materiId ? 'selected' : ''}>${esc(m.nama)} (Sem. ${m.semester}) — ${jml(m.id)} soal</option>`).join('')}</select>
-                ${stq.error ? '<div style="padding:8px 10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.8rem; margin-bottom:10px;">Jalankan supabase_patch_16.sql agar bentuk soal baru, stimulus, dan gambar dapat dipakai.</div>' : ''}
+                ${stq.error ? '<div style="padding:8px 10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.8rem; margin-bottom:10px;">Jalankan supabase_eduverse.sql agar bentuk soal baru, stimulus, dan gambar dapat dipakai.</div>' : ''}
                 ${form}
                 <div style="${kotakCbt}"><strong style="font-size:0.9rem;">📗 Impor dari Excel</strong>
                     <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Kolom: Materi, TP, Tipe (PG/PGK/KATEGORI/ISIAN), Stimulus, Pertanyaan, A–E (opsi atau pernyataan), Kunci, Toleransi, Parsial, Label, Level, Indikator, Pembahasan, Bobot. Lihat contoh tiap tipe di Template. Jika kolom Materi kosong, soal masuk ke materi yang dipilih di atas.</p>
@@ -2559,7 +2566,7 @@
                 const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
                 const nama = ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)) + '.jpg';
                 const { error } = await sb.storage.from('soal').upload(nama, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
-                if (error) throw new Error(error.message + ' (jalankan supabase_patch_16.sql)');
+                if (error) throw new Error(error.message + ' (jalankan supabase_eduverse.sql)');
                 const url = sb.storage.from('soal').getPublicUrl(nama).data.publicUrl;
                 document.getElementById(id).value = url;
                 prev.innerHTML = `<img src="${esc(url)}" style="max-height:60px; border-radius:6px; vertical-align:middle;"> <button class="btn-outline" style="padding:0 8px;" onclick="hapusGambarForm('${id}')">✖</button>`;
@@ -2595,7 +2602,7 @@
             const r = g.stimEdit
                 ? await sb.from('stimulus').update(isi).eq('id', g.stimEdit).select().single()
                 : await sb.from('stimulus').insert({ ...isi, materi_id: mid }).select().single();
-            if (r.error) { showToast('Gagal: ' + r.error.message + ' (jalankan supabase_patch_16.sql)', true); return; }
+            if (r.error) { showToast('Gagal: ' + r.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             window.cbtStimulus = (window.cbtStimulus || []).filter(s => s.id !== r.data.id).concat([r.data]);
             g.stimEdit = null;
             segarkanStim(r.data.id);
@@ -2679,14 +2686,14 @@
                 return;
             }
             const { error } = await sb.from('soal_bank').insert({ ...isi, materi_id: g.materiId });
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_16.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             g.tipeBaru = isi.tipe;
             showToast('Soal disimpan.');
             renderContent('nilai');
         }
         async function ubahMetaSoal(id, kolom, val) {
             const { error } = await sb.from('soal_bank').update({ [kolom]: val || null }).eq('id', id);
-            showToast(error ? 'Gagal: ' + error.message + ' (jalankan supabase_patch_12.sql)' : 'Tersimpan.', !!error);
+            showToast(error ? 'Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)' : 'Tersimpan.', !!error);
         }
         async function ubahIndikator(id, lama) {
             const baru = prompt('Indikator soal (satu kalimat):', lama || '');
@@ -2708,7 +2715,7 @@
             if (error && error.code === '23503') {
                 if (!confirm('Soal ini sudah dipakai dalam tes, sehingga tidak dapat dihapus tanpa mengubah nilai siswa.\n\nArsipkan saja? Soal arsip tidak muncul di bank soal dan tidak dipilih untuk tes baru, tetapi hasil tes lama tetap utuh.')) return;
                 const ars = await sb.from('soal_bank').update({ diarsip_pada: new Date().toISOString() }).eq('id', id);
-                if (ars.error) { showToast('Gagal mengarsipkan: ' + ars.error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+                if (ars.error) { showToast('Gagal mengarsipkan: ' + ars.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
                 showToast('Soal diarsipkan.');
             } else if (error) { showToast('Gagal: ' + error.message, true); return; }
             if (window.cbtG.editId === id) window.cbtG.editId = null;
@@ -2818,13 +2825,13 @@
                     const baru = [...stimPerlu.entries()].filter(([k]) => !idStim[k]).map(([, v]) => ({ ...v, teks: v.teks || v.judul }));
                     if (baru.length) {
                         const r = await sb.from('stimulus').insert(baru).select();
-                        if (r.error) { showToast('Gagal membuat stimulus: ' + r.error.message + ' (jalankan supabase_patch_16.sql)', true); return; }
+                        if (r.error) { showToast('Gagal membuat stimulus: ' + r.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
                         r.data.forEach(s => { idStim[s.materi_id + '|' + s.judul.trim().toLowerCase()] = s.id; });
                     }
                     rows.forEach(x => { if (x._stim) x.stimulus_id = idStim[x._stim] || null; delete x._stim; });
                     for (let i = 0; i < rows.length; i += 100) {
                         const { error } = await sb.from('soal_bank').insert(rows.slice(i, i + 100));
-                        if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_16.sql)', true); return; }
+                        if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
                     }
                     showToast(rows.length + ' soal diimpor' + (baru.length ? ', ' + baru.length + ' stimulus baru' : '') + (gagal.length ? '. ' + gagal.length + ' baris dilewati — ' + gagal.slice(0, 2).join('; ') : '.'), !!gagal.length);
                     renderContent('nilai');
@@ -2960,7 +2967,7 @@
             let tes = null;
             for (let coba = 0; coba < 5 && !tes; coba++) {
                 const r = await sb.from('cbt_tes').insert({ kode: kodeAcak(), judul, jenis: document.getElementById('ts-jenis').value, tingkat: g.tingkat, semester: g.semester, durasi_menit: durasi, acak_soal: document.getElementById('ts-acak').checked, acak_opsi: document.getElementById('ts-acakopsi').checked, tampil_skor: document.getElementById('ts-skor').checked, pakai_token: document.getElementById('ts-pakaitoken').checked, ikrar: document.getElementById('ts-ikrar').checked, refleksi: document.getElementById('ts-refleksi').checked, umpan_balik_tp: document.getElementById('ts-umpan').checked }).select().single();
-                if (!r.error) tes = r.data; else if (r.error.code !== '23505') { showToast('Gagal: ' + r.error.message + ' (jalankan supabase_patch_15.sql)', true); return; }
+                if (!r.error) tes = r.data; else if (r.error.code !== '23505') { showToast('Gagal: ' + r.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             }
             if (!tes) { showToast('Gagal membuat kode tes. Coba lagi.', true); return; }
             const a = await sb.from('cbt_tes_kelas').insert(kelasIds.map(id => ({ tes_id: tes.id, kelas_id: id })));
@@ -2986,7 +2993,7 @@
                     }
                     d = cache[id];
                     if (!d || d.memuat) continue;
-                    el.innerHTML = d.gagal ? '⚠ Token gagal dimuat. Pastikan supabase_patch_14.sql sudah dijalankan.' : `🔑 Token: <b style="font-size:1.35rem; letter-spacing:5px; font-family:monospace;">${esc(d.token)}</b> <small style="color:var(--text-muted);">berganti dalam ${fmtWaktu(Math.max(0, Math.round((d.habis - Date.now()) / 1000)))}. Token sebelumnya tetap diterima sampai pergantian berikutnya.</small>`;
+                    el.innerHTML = d.gagal ? '⚠ Token gagal dimuat. Pastikan supabase_eduverse.sql sudah dijalankan.' : `🔑 Token: <b style="font-size:1.35rem; letter-spacing:5px; font-family:monospace;">${esc(d.token)}</b> <small style="color:var(--text-muted);">berganti dalam ${fmtWaktu(Math.max(0, Math.round((d.habis - Date.now()) / 1000)))}. Token sebelumnya tetap diterima sampai pergantian berikutnya.</small>`;
                 }
             };
             tick();
@@ -3070,7 +3077,7 @@
         }
         async function bukaKisiKisi(tesId) {
             try { const D = await muatSoalTes(tesId); if (!D.items.length) { showToast('Tes ini belum memiliki soal.', true); return; } bukaDokumen(htmlKisiKisi(D)); }
-            catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_patch_12.sql)', true); }
+            catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_eduverse.sql)', true); }
         }
         async function bukaKartuSoal(tesId, denganAnalisis) {
             try {
@@ -3078,7 +3085,7 @@
                 if (denganAnalisis) { const r = await muatAnalisis(tesId); D = r.D; A = r.A.n ? r.A : null; } else D = await muatSoalTes(tesId);
                 if (!D.items.length) { showToast('Tes ini belum memiliki soal.', true); return; }
                 bukaDokumen(htmlKartuSoal(D, A));
-            } catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_patch_12.sql)', true); }
+            } catch (e) { showToast('Gagal: ' + e.message + ' (jalankan supabase_eduverse.sql)', true); }
         }
 
         // --- Analisis butir soal ---
@@ -3191,7 +3198,7 @@
             const k = Number(val);
             if (!confirm('Ubah kunci soal No. ' + no + ' menjadi ' + 'ABCDE'[k] + '?\n\nKunci di bank soal ikut diperbaiki, lalu semua siswa yang pernah mengerjakan soal ini (di tes mana pun) dinilai ulang.')) { renderContent('nilai'); return; }
             const { data, error } = await sb.rpc('cbt_ubah_kunci', { p_soal: soalId, p_kunci: k });
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); renderContent('nilai'); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); renderContent('nilai'); return; }
             showToast('Kunci diubah. ' + data + ' sesi dinilai ulang. Kirim ulang nilai dari tab Hasil bila perlu.');
             renderContent('nilai');
         }
@@ -3224,21 +3231,21 @@
             }
             if (!baru || !confirm('Simpan kunci baru untuk soal No. ' + no + '?\n\nKunci di bank soal ikut diperbaiki, lalu semua siswa yang pernah mengerjakan soal ini dinilai ulang.')) return;
             const { data, error } = await sb.rpc('cbt_ubah_kunci_json', { p_soal: soalId, p_kunci_json: baru, p_parsial: null });
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_16.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             showToast('Kunci diubah. ' + data + ' sesi dinilai ulang. Kirim ulang nilai dari tab Hasil bila perlu.');
             renderContent('nilai');
         }
         async function anulirCbt(soalId, anulir, no) {
             if (!confirm(anulir ? 'Anulir soal No. ' + no + '? Soal ini tidak lagi dihitung dalam skor tes ini dan semua siswa dinilai ulang.' : 'Batalkan anulir soal No. ' + no + '? Soal kembali dihitung dan semua siswa dinilai ulang.')) return;
             const { data, error } = await sb.rpc('cbt_anulir', { p_tes: window.cbtG.tesId, p_soal: soalId, p_anulir: anulir });
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             showToast((anulir ? 'Soal dianulir. ' : 'Anulir dibatalkan. ') + data + ' sesi dinilai ulang.');
             renderContent('nilai');
         }
         async function nilaiUlangCbt() {
             if (!confirm('Nilai ulang semua siswa yang sudah selesai pada tes ini dengan kunci terbaru?')) return;
             const { data, error } = await sb.rpc('cbt_nilai_ulang', { p_tes: window.cbtG.tesId });
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             showToast(data + ' sesi dinilai ulang.');
             renderContent('nilai');
         }
@@ -3248,7 +3255,7 @@
             for (let i = 0; i < A.butir.length; i += 10) {
                 const hasil = await Promise.all(A.butir.slice(i, i + 10).map(b => sb.from('soal_bank').update({ stat_p: Math.round(b.p * 100) / 100, stat_d: Math.round(b.D * 100) / 100, stat_n: A.n, stat_pada: waktu }).eq('id', b.id)));
                 const gagal = hasil.find(r => r.error);
-                if (gagal) { showToast('Gagal: ' + gagal.error.message + ' (jalankan supabase_patch_12.sql)', true); return; }
+                if (gagal) { showToast('Gagal: ' + gagal.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             }
             showToast('Statistik ' + A.butir.length + ' soal disimpan di bank soal.');
         }
@@ -3298,7 +3305,7 @@
                 sb.from('cbt_tes_soal').select('soal_id', { count: 'exact', head: true }).eq('tes_id', g.tesId).eq('dianulir', false)
             ]);
             const e1 = tq.error || ss.error || kk.error || ns.error;
-            if (e1) throw new Error(e1.message + ' (jalankan supabase_patch_15.sql)');
+            if (e1) throw new Error(e1.message + ' (jalankan supabase_eduverse.sql)');
             const [sw, jw] = await Promise.all([
                 sb.from('siswa').select('id, nis, nama, kelas(nama)').in('kelas_id', kk.data.map(k => k.kelas_id)).order('nama'),
                 ambilSemua(() => sb.from('cbt_jawaban').select('sesi_id, diubah, cbt_sesi!inner(tes_id)').eq('cbt_sesi.tes_id', g.tesId))
@@ -3366,7 +3373,7 @@
                 sb.from('cbt_tes_kelas').select('kelas_id').eq('tes_id', g.tesId),
                 sb.from('cbt_tes_soal').select('dianulir, soal_bank(materi_id, tp_id, materi(nama))').eq('tes_id', g.tesId)
             ]);
-            if (ss.error || kk.error || ms.error) throw new Error((ss.error || kk.error || ms.error).message + ' (jalankan supabase_patch_15.sql)');
+            if (ss.error || kk.error || ms.error) throw new Error((ss.error || kk.error || ms.error).message + ' (jalankan supabase_eduverse.sql)');
             const sw = await sb.from('siswa').select('id, nis, nama, kelas(nama)').in('kelas_id', kk.data.map(k => k.kelas_id)).order('nama');
             if (sw.error) throw new Error(sw.error.message);
             const aktifSoal = ms.data.filter(r => r.soal_bank && !r.dianulir).map(r => r.soal_bank);
@@ -3403,7 +3410,7 @@
                 <div style="display:flex; gap:6px; margin-bottom:8px; align-items:center; font-size:0.85rem;">Tampilan: ${tBtn('materi', 'Per Materi')}${tBtn('tp', 'Per TP')}</div>
                 <div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th><th>Kelas</th><th>Status</th><th>Benar</th><th>Skor</th>${kepala}<th title="Ikrar kejujuran">Ikrar</th><th title="Arahkan kursor ke ikon untuk membaca refleksi">Refleksi</th><th title="Berapa kali keluar halaman tes">Keluar Hlm.</th><th></th></tr>${baris}${kolom.length ? `<tr><td colspan="5" style="text-align:right;"><b>Rata-rata kelas</b></td><td><b>${fn1(rata)}</b></td>${rataKolom}<td colspan="4"></td></tr>` : ''}</table></div>
                 ${htmlRekapRefleksi(ss.data, sw.data)}
-                ${modeTp && !tps.length ? '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:8px;">Soal pada tes ini belum ditautkan ke TP, atau hasil per TP belum dihitung (jalankan supabase_patch_15.sql).</p>' : ''}
+                ${modeTp && !tps.length ? '<p style="font-size:0.85rem; color:var(--text-muted); margin-top:8px;">Soal pada tes ini belum ditautkan ke TP, atau hasil per TP belum dihitung (jalankan supabase_eduverse.sql).</p>' : ''}
                 <p style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">${modeTp ? 'Skor TP = persentase (berbobot) soal TP itu yang dijawab benar. Sel merah: di bawah 60. Arahkan kursor ke judul kolom untuk melihat rumusan TP. Skor TP dengan 1–2 butir hanya gambaran kasar.' : 'Skor materi = persentase (berbobot) soal materi itu yang dijawab benar.'} ${sas ? 'Tes ini berjenis <b>Sumatif Akhir Semester</b>: "Kirim Nilai SAS" mengisi kolom SAS semester ' + esc(tesIni.semester) + ' di Daftar Nilai → Rekap Gabungan, terpisah dari sumatif lingkup materi.' : '"Kirim Nilai Awal" mengisi Nilai Awal tiap materi di tab Perbaikan &amp; Pengayaan. Nilai Sumatif di Daftar Nilai baru terisi setelah tindak lanjut selesai dan Nilai Akhir diterapkan.'} 🔓 Reset Login mengizinkan siswa melanjutkan dari perangkat lain; +5' menambah waktu siswa itu.</p>`;
         }
         // Ringkasan refleksi siswa untuk guru: sebaran keyakinan & perasaan, lalu kutipan bagian tersulit.
@@ -3436,14 +3443,14 @@
         async function resetLoginCbt(id) {
             if (!confirm('Reset login siswa ini? Siswa dapat masuk dari perangkat lain dengan kode, NIS, dan token. Perangkat lama akan berhenti. Jawaban yang sudah tersimpan tetap ada.')) return;
             const { error } = await sb.from('cbt_sesi').update({ perangkat: null }).eq('id', id);
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             showToast('Login direset.');
             renderContent('nilai');
         }
         async function tambahWaktuCbt(id, sekarang) {
             const baru = Math.min(300, (Number(sekarang) || 0) + 5);
             const { error } = await sb.from('cbt_sesi').update({ tambahan_menit: baru }).eq('id', id);
-            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+            if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             showToast('Waktu siswa ditambah menjadi +' + baru + ' menit. Layar siswa menyesuaikan dalam 30 detik.');
             renderContent('nilai');
         }
@@ -3455,7 +3462,7 @@
                 if (!confirm('Kirim ' + rows.length + ' nilai SAS semester ' + h.tes.semester + ' ke Daftar Nilai? Nilai SAS yang sudah ada untuk siswa tersebut akan diperbarui. Nilai sumatif per materi tidak diubah.')) return;
                 for (let i = 0; i < rows.length; i += 500) {
                     const { error } = await sb.from('nilai_sas').upsert(rows.slice(i, i + 500), { onConflict: 'siswa_id,semester' });
-                    if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_patch_14.sql)', true); return; }
+                    if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
                 }
                 showToast(rows.length + ' nilai SAS dikirim. Lihat di Daftar Nilai → Rekap Gabungan.');
                 return;
@@ -3576,7 +3583,7 @@
         async function simpanSesiPP() {
             const D = window.ppD, st = window.ppS;
             const { error } = await sb.from('pp_sesi').upsert({ kelas_id: st.kelasId, materi_id: st.materiId, tanggal: D.sesi.tanggal || null, kkm: D.sesi.kkm, nilai_min: D.sesi.nilai_min, nilai_maks: D.sesi.nilai_maks, nilai_diinginkan: D.sesi.nilai_diinginkan }, { onConflict: 'kelas_id,materi_id' });
-            if (error) showToast('Gagal menyimpan pengaturan: ' + error.message + ' (jalankan supabase_patch_13.sql)', true);
+            if (error) showToast('Gagal menyimpan pengaturan: ' + error.message + ' (jalankan supabase_eduverse.sql)', true);
         }
         async function ubahSesiPP(el) {
             const peta = { 'pps-tanggal': 'tanggal', 'pps-kkm': 'kkm', 'pps-min': 'nilai_min', 'pps-maks': 'nilai_maks', 'pps-dn': 'nilai_diinginkan' }, k = peta[el.id], D = window.ppD;
@@ -3597,7 +3604,7 @@
             const D = window.ppD, v = String(val).trim() === '' ? null : Number(val);
             if (v !== null && (isNaN(v) || v < 0 || v > 100)) { showToast('Nilai awal harus 0 sampai 100.', true); return; }
             const { error } = await sb.from('nilai_sumatif').upsert({ siswa_id: sid, materi_id: window.ppS.materiId, skor_awal: v }, { onConflict: 'siswa_id,materi_id' });
-            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_patch_13.sql)', true); return; }
+            if (error) { showToast('Gagal menyimpan: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
             D.data[sid] = Object.assign(D.data[sid] || { selesai: false, akhir: null }, { awal: v });
             segarkanPP();
         }
