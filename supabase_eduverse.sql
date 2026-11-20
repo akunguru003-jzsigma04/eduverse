@@ -1,6 +1,6 @@
 -- =====================================================================
 --  EDUVERSE — Skema Supabase lengkap (satu file)
---  Versi skema: 2026.11.20.1
+--  Versi skema: 2026.11.20.2
 --  Menggantikan supabase_schema.sql dan seluruh supabase_patch_1 s.d. 17.
 --
 --  Cara pakai:
@@ -310,7 +310,9 @@ create table if not exists public.media (
   file_path text not null,                                      -- lokasi di bucket "media"
   ukuran integer,
   penilaian boolean not null default false,                     -- media mengirim nilai ke EDUVERSE
-  kktp numeric(5,2) not null default 75 check (kktp between 1 and 100),
+  kktp numeric(5,2) not null default 75 check (kktp between 1 and 100), -- informasi: KKTP yang diatur di dalam media
+  pengaturan jsonb not null default '{}'::jsonb,
+  formatif_otomatis boolean not null default true,             -- predikat terbaik langsung masuk nilai_formatif TP tujuan                -- pengaturan guru di dalam media (mis. jadwal & KKTP), dibagikan ke semua siswa
   kode_akses text,                                              -- opsional; bila diisi, siswa wajib memasukkannya
   aktif boolean not null default true,
   urutan integer not null default 1,
@@ -328,9 +330,16 @@ create table if not exists public.media_hasil (
   benar integer,
   salah integer,
   penilaian boolean not null default true,                      -- dihitung untuk nilai formatif
+  predikat text check (predikat in ('IST', 'BAIK', 'PB')),     -- predikat menurut penilaian di dalam media
+  kktp numeric(5,2),                                            -- KKTP yang dipakai media saat itu
   rincian jsonb,
   dikirim_pada timestamptz not null default now()
 );
+-- proyek yang sudah memasang versi 2026.11.20.1
+alter table public.media add column if not exists pengaturan jsonb not null default '{}'::jsonb;
+alter table public.media add column if not exists formatif_otomatis boolean not null default true;
+alter table public.media_hasil add column if not exists predikat text check (predikat in ('IST', 'BAIK', 'PB'));
+alter table public.media_hasil add column if not exists kktp numeric(5,2);
 
 
 -- =====================================================================
@@ -1051,7 +1060,7 @@ returns jsonb
 language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', md.id, 'judul', md.judul, 'deskripsi', md.deskripsi, 'file_path', md.file_path,
-           'penilaian', md.penilaian, 'perlu_kode', md.kode_akses is not null,
+           'penilaian', md.penilaian, 'perlu_kode', md.kode_akses is not null, 'pengaturan', md.pengaturan,
            'tingkat', m.tingkat, 'semester', m.semester, 'materi', m.nama, 'materi_urutan', m.urutan,
            'tp_label', case when t.id is not null then 'TP' || t.no end, 'tp', t.deskripsi)
          order by m.tingkat, m.semester, m.urutan, md.urutan, md.judul), '[]'::jsonb)
@@ -1082,7 +1091,7 @@ end $$;
 create or replace function public.media_kirim(p_media uuid, p_kelas uuid, p_nis text, p_kode text, p_data jsonb)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare md public.media; s public.siswa; v_skor numeric; n integer; v_rinci jsonb;
+declare md public.media; s public.siswa; v_skor numeric; n integer; v_rinci jsonb; v_pred text; v_kktp numeric; v_formatif text; b record;
 begin
   select * into md from public.media where id = p_media and aktif;
   if not found then return jsonb_build_object('error', 'Media tidak ditemukan atau sedang dinonaktifkan.'); end if;
@@ -1096,14 +1105,32 @@ begin
   if v_skor < 0 or v_skor > 100 then return jsonb_build_object('error', 'Skor harus 0 sampai 100.'); end if;
   select count(*) into n from public.media_hasil where media_id = md.id and siswa_id = s.id and dikirim_pada > now() - interval '1 day';
   if n >= 60 then return jsonb_build_object('error', 'Batas kiriman hari ini tercapai.'); end if;
+  -- predikat dari media: IST/BAIK/PB atau Istimewa/Baik/Perlu Bimbingan
+  v_pred := case upper(regexp_replace(coalesce(p_data ->> 'predikat', ''), '\s+', '', 'g'))
+              when 'IST' then 'IST' when 'ISTIMEWA' then 'IST' when 'A' then 'IST'
+              when 'BAIK' then 'BAIK' when 'B' then 'BAIK'
+              when 'PB' then 'PB' when 'PERLUBIMBINGAN' then 'PB' when 'C' then 'PB' when 'D' then 'PB' end;
+  if jsonb_typeof(p_data -> 'kktp') = 'number' and (p_data ->> 'kktp')::numeric between 1 and 100 then v_kktp := round((p_data ->> 'kktp')::numeric, 2); end if;
   v_rinci := p_data -> 'rincian';
   if v_rinci is not null and length(v_rinci::text) > 20000 then v_rinci := null; end if;
-  insert into public.media_hasil (media_id, siswa_id, bagian, skor, benar, salah, penilaian, rincian)
+  insert into public.media_hasil (media_id, siswa_id, bagian, skor, benar, salah, penilaian, predikat, kktp, rincian)
   values (md.id, s.id, left(nullif(trim(coalesce(p_data ->> 'bagian', '')), ''), 40), round(v_skor, 2),
           case when (p_data ->> 'benar') ~ '^[0-9]{1,4}$' then (p_data ->> 'benar')::integer end,
           case when (p_data ->> 'salah') ~ '^[0-9]{1,4}$' then (p_data ->> 'salah')::integer end,
-          coalesce((p_data ->> 'penilaian')::boolean, true), v_rinci);
-  return jsonb_build_object('ok', true);
+          coalesce((p_data ->> 'penilaian')::boolean, true), v_pred, v_kktp, v_rinci);
+  -- Terhubung ke nilai formatif: predikat percobaan penilaian terbaik (skor tertinggi) menjadi predikat TP tujuan.
+  if md.formatif_otomatis and md.tp_id is not null then
+    select h.skor, h.predikat, coalesce(h.kktp, md.kktp) as k into b from public.media_hasil h
+     where h.media_id = md.id and h.siswa_id = s.id and h.penilaian
+     order by h.skor desc, h.dikirim_pada desc limit 1;
+    if found then
+      v_formatif := coalesce(b.predikat, case when b.skor < b.k then 'PB'
+                                              when b.skor >= least(100, b.k + ceil((100 - b.k) * 3 / 5)) then 'IST' else 'BAIK' end);
+      insert into public.nilai_formatif (siswa_id, tp_id, predikat) values (s.id, md.tp_id, v_formatif)
+      on conflict (siswa_id, tp_id) do update set predikat = excluded.predikat;
+    end if;
+  end if;
+  return jsonb_build_object('ok', true, 'formatif', v_formatif);
 end $$;
 
 -- ---------- Hak akses fungsi ----------
@@ -1232,7 +1259,8 @@ begin
                      where p.pronamespace = ns and (
                            (p.proname = 'cbt_butir' and not ('nilai' = any(coalesce(p.proargnames, '{}'))))
                         or (p.proname = 'cbt_jawab' and not ('p_jawaban' = any(coalesce(p.proargnames, '{}'))))
-                        or (p.proname = 'cbt_intro' and not ('p_token' = any(coalesce(p.proargnames, '{}')))))),
+                        or (p.proname = 'cbt_intro' and not ('p_token' = any(coalesce(p.proargnames, '{}'))))
+                        or (p.proname = 'media_kirim' and p.prosrc not like '%v_pred%'))),
     'bucket_kurang', (select coalesce(jsonb_agg(b), '[]'::jsonb) from unnest(bucket) b
                        where not exists (select 1 from storage.buckets sb where sb.id = b)),
     'riwayat', (select coalesce(jsonb_agg(jsonb_build_object('versi', r.versi, 'pada', r.dijalankan) order by r.dijalankan desc), '[]'::jsonb)
@@ -1263,9 +1291,9 @@ begin
 end $$;
 
 -- Catat versi skema (dibaca menu Pembaruan Sistem)
-insert into public.sistem (kunci, nilai, diperbarui) values ('versi_skema', '2026.11.20.1', now())
+insert into public.sistem (kunci, nilai, diperbarui) values ('versi_skema', '2026.11.20.2', now())
 on conflict (kunci) do update set nilai = excluded.nilai, diperbarui = now();
-insert into public.sistem_riwayat (versi) values ('2026.11.20.1');
+insert into public.sistem_riwayat (versi) values ('2026.11.20.2');
 
 notify pgrst, 'reload schema';
 

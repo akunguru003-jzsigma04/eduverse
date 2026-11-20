@@ -1000,9 +1000,10 @@
         // === PEMBARUAN SISTEM ===
         // Saat merilis versi baru: naikkan APP_VERSI (dan SKEMA_DIBUTUHKAN bila SQL berubah),
         // perbarui CATATAN_VERSI, lalu unggah index.html, supabase_eduverse.sql, dan versi.json ke GitHub.
-        const APP_VERSI = '2026.11.20.1';
-        const SKEMA_DIBUTUHKAN = '2026.11.20.1';
+        const APP_VERSI = '2026.11.20.2';
+        const SKEMA_DIBUTUHKAN = '2026.11.20.2';
         const CATATAN_VERSI = [
+            'Media Interaktif: menu Guru di dalam media dipadukan ke EDUVERSE (⚙️ Atur); predikat & KKTP mengikuti penilaian di dalam media dan langsung menjadi nilai formatif TP.',
             'MPI → Media Interaktif: guru mengunggah materi HTML interaktif; nilai penilaiannya dapat diterapkan menjadi nilai formatif per TP.',
             'Satu file database (supabase_eduverse.sql) menggantikan semua patch.',
             'Menu Pembaruan Sistem: cek versi & kesehatan sistem, cadangan data, panduan pembaruan.',
@@ -1646,40 +1647,62 @@
             const template = /function\s+kirimHasil\s*\(/.test(teks) && /function\s+buildHasil\s*\(/.test(teks);
             const api = /EDUVERSE\s*\.\s*kirimNilai/.test(teks);
             const judul = ((teks.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').replace(/\s+/g, ' ').trim();
-            return { template, api, judul };
+            // Kunci localStorage berisi pengaturan guru di dalam media (dibagikan ke semua siswa lewat EDUVERSE).
+            const meta = (teks.match(/<meta[^>]+name=["']eduverse-pengaturan["'][^>]*content=["']([^"']*)["']/i) || [])[1];
+            const kunci = meta != null ? meta.split(',').map(x => x.trim()).filter(Boolean) : (template && /['"]mpi_jadwal['"]/.test(teks) ? ['mpi_jadwal'] : []);
+            const menuGuru = /id=["']tgG["']/.test(teks) || kunci.length > 0;
+            return { template, api, judul, kunci, menuGuru };
         }
+        // Predikat yang dikirim media: IST/BAIK/PB atau Istimewa/Baik/Perlu Bimbingan
+        const normPredikat = (p) => { const v = String(p || '').replace(/\s+/g, '').toUpperCase(); return ({ IST: 'IST', ISTIMEWA: 'IST', BAIK: 'BAIK', PB: 'PB', PERLUBIMBINGAN: 'PB' })[v] || null; };
+        const kktpPengaturan = (peng) => { try { const k = JSON.parse((peng || {}).mpi_jadwal || 'null'); return k && typeof k.kktp === 'number' ? k.kktp : null; } catch (e) { return null; } };
 
         // ---- Jembatan yang disisipkan ke dalam media ----
         function siapkanSrcdoc(html, cfg) {
             const jsonAman = (o) => JSON.stringify(o).replace(/</g, '\\u003c');
             const jembatan = `<script>(function(){var C=${jsonAman(cfg)};
 function buat(awal,kirim){var d=Object.assign({},awal||{});return{getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[String(k)]=String(v);kirim&&kirim(d)},removeItem:function(k){delete d[String(k)];kirim&&kirim(d)},clear:function(){for(var k in d)delete d[k];kirim&&kirim(d)},key:function(i){return Object.keys(d)[i]||null},get length(){return Object.keys(d).length}}}
-var t;var ls=buat(C.simpan,function(d){clearTimeout(t);t=setTimeout(function(){parent.postMessage({eduverse:'simpan',data:d},'*')},300)});
+var t;var ls=buat(Object.assign({},C.simpan,C.pengaturan),function(d){clearTimeout(t);t=setTimeout(function(){parent.postMessage({eduverse:'simpan',data:d},'*')},300)});
 try{Object.defineProperty(window,'localStorage',{value:ls,configurable:true})}catch(e){}
 try{Object.defineProperty(window,'sessionStorage',{value:buat({}),configurable:true})}catch(e){}
-window.EDUVERSE={versi:1,mode:C.mode,siswa:C.siswa,kirimNilai:function(o){try{parent.postMessage({eduverse:'nilai',data:JSON.parse(JSON.stringify(o||{}))},'*')}catch(e){}}};})();<\/script>`;
-            // Adaptor template MPI: isi identitas dari EDUVERSE, sembunyikan menu guru bawaan bagi siswa, teruskan hasil.
+window.EDUVERSE={versi:2,mode:C.mode,siswa:C.siswa,kirimNilai:function(o){try{parent.postMessage({eduverse:'nilai',data:JSON.parse(JSON.stringify(o||{}))},'*')}catch(e){}}};})();<\/script>`;
+            // Adaptor template MPI: menu guru di dalam media dipadukan ke menu guru EDUVERSE.
+            // Siswa & pratinjau: tombol Guru disembunyikan. Mode atur (guru EDUVERSE): langsung masuk Dashboard
+            // tanpa PIN, hanya pengaturan (jadwal, kesempatan, bobot, KKTP, analisis butir) yang tampil;
+            // rekap, laporan, impor/ekspor diambil alih EDUVERSE → 📊 Hasil.
             const adaptor = `<script>(function(){var E=window.EDUVERSE;if(!E)return;
-function isi(){var s=E.siswa,nm=document.getElementById('nm'),kl=document.getElementById('kl');if(s&&nm&&kl){nm.value=s.nama;kl.value=s.kelas;nm.readOnly=kl.readOnly=true;nm.title=kl.title='Diisi otomatis oleh EDUVERSE'}
-if(E.mode==='siswa'){var g=document.getElementById('tgG');if(g)g.style.display='none'}}
+function $q(s){try{return document.querySelector(s)}catch(e){return null}}function sembunyi(el){if(el)el.style.display='none'}
+function isi(){var g=$q('#tgG');sembunyi(g);
+var s=E.siswa,nm=$q('#nm'),kl=$q('#kl');if(s&&nm&&kl){nm.value=s.nama;kl.value=s.kelas;nm.readOnly=kl.readOnly=true;nm.title=kl.title='Diisi otomatis oleh EDUVERSE'}
+document.querySelectorAll('[onclick^="stuExport"]').forEach(sembunyi);
+if(E.mode==='atur'){['.kpi','#wkCard','#fQ'].forEach(function(x){sembunyi($q(x))});
+var f=$q('#fCls');if(f)sembunyi(f.closest('label'));var tb=$q('#dtb');if(tb){var w=tb.closest('.tw');sembunyi(w);if(w&&w.nextElementSibling)sembunyi(w.nextElementSibling)}
+['tchCSV','$(\\'impF\\')','tchRender','cloudPull','tchChangePin','tchReset','tchOut'].forEach(function(f){document.querySelectorAll('[onclick^="'+f+'"]').forEach(sembunyi)});
+var d=$q('#dash');if(d&&!$q('#evBanner')){var b=document.createElement('div');b.id='evBanner';b.className='card';b.style.cssText='border:2px solid #2563eb;background:#eff6ff;color:#1e3a8a';b.innerHTML='<b>⚙️ Pengaturan media (terhubung EDUVERSE)</b><div class=sm style=margin-top:4px>Jadwal, batas kesempatan, bobot, dan <b>KKTP</b> yang diatur di sini otomatis berlaku untuk semua siswa yang membuka media ini lewat EDUVERSE. Rekap nilai, predikat, dan penerapan ke Nilai Formatif ada di EDUVERSE → 📊 Hasil.</div>';d.insertBefore(b,d.firstChild)}
+try{S.guru=1;S.gpin=(typeof tchPinGet==='function'?tchPinGet():'');show('dash');if(typeof jwReset==='function')jwReset();if(typeof tchRender==='function')tchRender()}catch(e){}}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',isi);else isi();
-if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kirimHasil;kirimHasil=function(menu,pt){try{if(!window.__noSend){var o=buildHasil(menu,pt);E.kirimNilai({bagian:menu,skor:o.skor,benar:o.benar,salah:o.salah,rincian:o.jawaban,penilaian:menu==='Berlatih'})}}catch(e){}return asli.apply(this,arguments)}}})();<\/script>`;
+if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kirimHasil;kirimHasil=function(menu,pt){try{if(!window.__noSend&&E.mode!=='atur'){var o=buildHasil(menu,pt),k=null,p=null;try{k=kktpBatas().k}catch(e){}try{p=predikat(o.skor)}catch(e){}
+E.kirimNilai({bagian:menu,skor:o.skor,benar:o.benar,salah:o.salah,rincian:o.jawaban,penilaian:menu==='Berlatih',predikat:p,kktp:k})}}catch(e){}return asli.apply(this,arguments)}}})();<\/script>`;
             let h = String(html);
             h = /<head[^>]*>/i.test(h) ? h.replace(/<head[^>]*>/i, m => m + jembatan) : jembatan + h;
             h = /<\/body>/i.test(h) ? h.replace(/<\/body>(?![\s\S]*<\/body>)/i, adaptor + '</body>') : h + adaptor;
             return h;
         }
 
-        // ---- Pemutar ----
-        async function putarMedia(m, siswa, pratinjau) {
+        // ---- Pemutar ----  mode: 'siswa' | 'pratinjau' (guru melihat sebagai siswa) | 'atur' (pengaturan guru di dalam media)
+        async function putarMedia(m, siswa, mode) {
+            mode = mode === true ? 'pratinjau' : (mode || 'siswa');
             let html;
             try {
                 const r = await fetch(urlMedia(m.file_path) + '?t=' + Date.now(), { cache: 'no-store' });
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 html = await r.text();
             } catch (e) { showToast('Media gagal dimuat (' + e.message + '). Periksa koneksi lalu coba lagi.', true); return; }
-            window.mediaPlayer = { m, siswa, pratinjau: !!pratinjau, terakhir: null };
-            window.mediaSrcdoc = siapkanSrcdoc(html, { mode: pratinjau ? 'guru' : 'siswa', siswa: siswa ? { nama: siswa.nama, kelas: siswa.kelas, nis: siswa.nis } : null, simpan: bacaJson('eduverse_media_' + m.id, {}) });
+            const det = deteksiMedia(html);
+            if (mode === 'atur' && !det.menuGuru) { showToast('Media ini tidak memiliki menu pengaturan guru.', true); return; }
+            const kunciSimpan = 'eduverse_media_' + (mode === 'siswa' ? '' : 'guru_') + m.id;
+            window.mediaPlayer = { m, siswa, mode, pratinjau: mode !== 'siswa', kunciSimpan, kunciPeng: det.kunci, peng: Object.assign({}, m.pengaturan || {}) };
+            window.mediaSrcdoc = siapkanSrcdoc(html, { mode, siswa: siswa ? { nama: siswa.nama, kelas: siswa.kelas, nis: siswa.nis } : null, simpan: bacaJson(kunciSimpan, {}), pengaturan: m.pengaturan || {} });
             document.querySelector('.portal-wrapper').classList.add('fokus', 'lebar');
             document.body.classList.add('fokus-game');
             renderContent('mediaputar');
@@ -1687,12 +1710,14 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
         function htmlMediaPutar() {
             const p = window.mediaPlayer;
             if (!p) return '<p>Media tidak ditemukan.</p>';
-            const st = p.pratinjau ? '👁️ Pratinjau guru — nilai tidak dikirim' : p.siswa ? (p.m.penilaian ? '📝 ' + esc(p.siswa.nama) + ' • nilai dikirim otomatis ke guru' : esc(p.siswa.nama)) : '';
-            return `<div class="game-bar" style="margin-bottom:8px;"><b style="flex:1; font-size:0.95rem;">🎲 ${esc(p.m.judul)}</b><span id="media-status" style="font-size:0.78rem; color:var(--text-muted);">${st}</span><button class="btn-outline" style="padding:4px 12px;" onclick="tutupMedia()">✕ Tutup</button></div>
+            const st = p.mode === 'atur' ? '⚙️ Pengaturan guru — perubahan langsung berlaku untuk siswa' : p.mode === 'pratinjau' ? '👁️ Pratinjau guru — nilai tidak dikirim' : p.siswa ? (p.m.penilaian ? '📝 ' + esc(p.siswa.nama) + ' • nilai dikirim otomatis ke guru' : esc(p.siswa.nama)) : '';
+            return `<div class="game-bar" style="margin-bottom:8px;"><b style="flex:1; font-size:0.95rem;">${p.mode === 'atur' ? '⚙️' : '🎲'} ${esc(p.m.judul)}</b><span id="media-status" style="font-size:0.78rem; color:var(--text-muted);">${st}</span><button class="btn-outline" style="padding:4px 12px;" onclick="tutupMedia()">✕ Tutup</button></div>
                 <iframe id="media-frame" title="${esc(p.m.judul)}" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads" allow="fullscreen; autoplay" style="width:100%; height:calc(100vh - 170px); min-height:480px; border:1px solid var(--browser-border); border-radius:10px; background:#fff;"></iframe>`;
         }
         function pasangIframeMedia() { const f = document.getElementById('media-frame'); if (f && window.mediaSrcdoc) f.srcdoc = window.mediaSrcdoc; }
-        function tutupMedia() {
+        async function tutupMedia() {
+            const p = window.mediaPlayer;
+            if (p && p.mode === 'atur') await simpanPengaturanMedia(true);
             window.mediaPlayer = null; window.mediaSrcdoc = null;
             document.querySelector('.portal-wrapper').classList.remove('fokus', 'lebar');
             document.body.classList.remove('fokus-game');
@@ -1700,21 +1725,38 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             renderContent('mpi');
             kirimOutboxMedia();
         }
+        // Mode atur: kunci pengaturan yang berubah disimpan ke database agar berlaku di perangkat semua siswa.
+        async function simpanPengaturanMedia(akhir) {
+            const p = window.mediaPlayer;
+            if (!p || p.mode !== 'atur' || !p.data || !p.kunciPeng.length) return;
+            const baru = {}; p.kunciPeng.forEach(k => { if (p.data[k] != null) baru[k] = p.data[k]; });
+            if (JSON.stringify(baru) === JSON.stringify(p.peng)) return;
+            const isi = { pengaturan: baru, diperbarui: new Date().toISOString() }, k = kktpPengaturan(baru);
+            if (k >= 1 && k <= 100) isi.kktp = k;
+            const { error } = await sb.from('media').update(isi).eq('id', p.m.id);
+            if (error) { statusMedia('⚠ Pengaturan gagal disimpan: ' + error.message, '#b91c1c'); if (akhir) showToast('Pengaturan media gagal disimpan: ' + error.message, true); return; }
+            p.peng = baru; p.m.pengaturan = baru;
+            statusMedia('💾 Pengaturan tersimpan' + (k ? ' • KKTP ' + k : '') + ' • berlaku untuk semua siswa', '#16a34a');
+        }
         function statusMedia(teks, warna) { const el = document.getElementById('media-status'); if (el) { el.textContent = teks; el.style.color = warna || ''; } }
         window.addEventListener('message', (e) => {
             const p = window.mediaPlayer, f = document.getElementById('media-frame');
             if (!p || !f || e.source !== f.contentWindow) return;
             const d = e.data || {};
             if (d.eduverse === 'simpan' && d.data && typeof d.data === 'object') {
-                if (!tulisJson('eduverse_media_' + p.m.id, d.data)) statusMedia('⚠ Memori perangkat penuh; progres mungkin tidak tersimpan', '#b45309');
+                p.data = d.data;
+                if (!tulisJson(p.kunciSimpan, d.data)) statusMedia('⚠ Memori perangkat penuh; progres mungkin tidak tersimpan', '#b45309');
+                if (p.mode === 'atur') simpanPengaturanMedia(false);
             } else if (d.eduverse === 'nilai' && d.data) {
                 const o = d.data, skor = Number(o.skor);
                 if (!(skor >= 0 && skor <= 100)) return;
-                const label = (o.bagian ? o.bagian + ' ' : 'Nilai ') + fn1(skor);
-                if (p.pratinjau) { statusMedia('👁️ Pratinjau: ' + label + ' (tidak dikirim)', '#2563eb'); return; }
+                const pred = normPredikat(o.predikat);
+                const label = (o.bagian ? o.bagian + ' ' : 'Nilai ') + fn1(skor) + (pred ? ' (' + NAMA_PRED[pred] + ')' : '');
+                if (p.mode !== 'siswa') { statusMedia('👁️ Pratinjau: ' + label + ' (tidak dikirim)', '#2563eb'); return; }
                 if (!p.siswa || !p.m.penilaian) return;
+                const kk = Number(o.kktp);
                 const q = bacaJson(OUTBOX_MEDIA, []);
-                q.push({ media: p.m.id, kelas: p.siswa.kelasId, nis: p.siswa.nis, kode: p.siswa.kode || null, data: { skor, bagian: o.bagian || null, benar: o.benar, salah: o.salah, penilaian: o.penilaian !== false, rincian: o.rincian || null }, label });
+                q.push({ media: p.m.id, kelas: p.siswa.kelasId, nis: p.siswa.nis, kode: p.siswa.kode || null, data: { skor, bagian: o.bagian || null, benar: o.benar, salah: o.salah, penilaian: o.penilaian !== false, predikat: pred, kktp: kk >= 1 && kk <= 100 ? kk : null, rincian: o.rincian || null }, label });
                 tulisJson(OUTBOX_MEDIA, q);
                 statusMedia('⏳ Mengirim ' + label + '…', '#b45309');
                 kirimOutboxMedia();
@@ -1732,7 +1774,7 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
                     if (error) { statusMedia('⏳ ' + it.label + ' menunggu sinyal; dikirim otomatis nanti', '#b45309'); break; }
                     q = bacaJson(OUTBOX_MEDIA, []).slice(1); tulisJson(OUTBOX_MEDIA, q);
                     if (data && data.error) statusMedia('⚠ ' + it.label + ' tidak tersimpan: ' + data.error, '#b91c1c');
-                    else statusMedia('☁️ ' + it.label + ' terkirim ke guru ✓', '#16a34a');
+                    else statusMedia('☁️ ' + it.label + ' terkirim ke guru ✓' + (data && data.formatif ? ' • Nilai Formatif: ' + NAMA_PRED[data.formatif] : ''), '#16a34a');
                 }
             } finally { window.mediaKirim = false; }
         }
@@ -1822,9 +1864,10 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
                 <label>TP tujuan nilai formatif</label><select id="md-tp">${window.opsiTpMedia(e ? e.materi_id : '', e ? e.tp_id : '')}</select>
                 <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:10px; font-size:0.85rem;">
                     <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;"><input type="checkbox" id="md-nilai" ${e && e.penilaian ? 'checked' : ''} style="width:auto;"> 📝 Media ini memiliki penilaian</label>
-                    <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;">KKTP <input type="number" id="md-kktp" min="1" max="100" value="${e ? Number(e.kktp) : 75}" style="width:70px;"></label>
+                    <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;" title="Predikat percobaan terbaik siswa langsung tercatat di Daftar Nilai → Formatif pada TP tujuan"><input type="checkbox" id="md-otomatis" ${!e || e.formatif_otomatis !== false ? 'checked' : ''} style="width:auto;"> 🔗 Langsung masuk Nilai Formatif</label>
                     <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;">Kode akses <input id="md-kode" value="${esc(e ? e.kode_akses || '' : '')}" placeholder="opsional" style="width:110px; text-transform:uppercase;"></label>
                     <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;"><input type="checkbox" id="md-aktif" ${!e || e.aktif ? 'checked' : ''} style="width:auto;"> Tampilkan ke siswa</label></div>
+                <p style="font-size:0.78rem; color:var(--text-muted); margin-top:8px;">🎯 Predikat (Istimewa/Baik/Perlu Bimbingan) dan KKTP mengikuti penilaian <b>di dalam media</b>. Menu Guru bawaan media dipadukan ke EDUVERSE: atur jadwal, kesempatan, dan KKTP lewat tombol <b>⚙️ Atur</b> pada kartu media.</p>
                 <div style="display:flex; gap:8px; margin-top:12px;">${e ? '<button class="btn-outline" onclick="window.mpiState.mediaEdit=null; renderContent(\'mpi\')">Batal</button>' : ''}<button class="btn-submit" style="flex:1;" id="md-simpan" onclick="simpanMedia()">${e ? '💾 Simpan Perubahan' : '⬆️ Unggah &amp; Simpan'}</button></div>
                 <details style="margin-top:12px; font-size:0.8rem;"><summary style="cursor:pointer;">ℹ️ Agar nilai dari media lain ikut masuk EDUVERSE</summary>
                     <p style="margin-top:6px;">Media berformat template MPI (memiliki menu Bermain/Berlatih seperti Materi 1) terhubung otomatis: nilai <b>Berlatih</b> menjadi nilai penilaian. Untuk media lain, tambahkan satu baris saat siswa selesai mengerjakan:</p>
@@ -1835,8 +1878,8 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             const tpLabel = (id) => id && P.label[id] ? P.label[id] : null;
             const daftar = md.data.map(x => {
                 const m = P2(x.materi_id), info = { tingkat: m ? m.tingkat : null, materi: m ? m.nama : null, judul: x.judul, deskripsi: x.deskripsi, penilaian: x.penilaian, perlu_kode: !!x.kode_akses, tp_label: tpLabel(x.tp_id), tp: (tq.data.find(t => t.id === x.tp_id) || {}).deskripsi };
-                const tombol = `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"><button class="btn-outline" style="padding:4px 10px;" onclick="pratinjauMedia('${x.id}')">▶ Pratinjau</button>${x.penilaian ? `<button class="btn-outline" style="padding:4px 10px;" onclick="window.mpiState.hasilMedia='${x.id}'; renderContent('mpi')">📊 Hasil (${siswaPer[x.id] ? siswaPer[x.id].size : 0} siswa)</button>` : ''}<button class="btn-outline" style="padding:4px 10px;" onclick="window.mpiState.mediaEdit='${x.id}'; renderContent('mpi')">✏️</button><button class="btn-outline" style="padding:4px 10px;" title="${x.aktif ? 'Sembunyikan dari siswa' : 'Tampilkan ke siswa'}" onclick="aktifkanMedia('${x.id}', ${!x.aktif})">${x.aktif ? '⏸' : '▶'}</button><button class="btn-outline" style="padding:4px 10px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusMedia('${x.id}')">🗑️</button></div>
-                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">${x.aktif ? '' : '⏸ Disembunyikan dari siswa • '}${x.penilaian ? 'KKTP ' + Number(x.kktp) + (x.kode_akses ? ' • kode ' + esc(x.kode_akses) : '') + ' • ' + (jml[x.id] || 0) + ' kiriman' : 'tanpa penilaian'}</div>`;
+                const tombol = `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"><button class="btn-outline" style="padding:4px 10px;" onclick="pratinjauMedia('${x.id}')">▶ Pratinjau</button><button class="btn-outline" style="padding:4px 10px;" title="Menu Guru di dalam media: jadwal, kesempatan, KKTP" onclick="aturMedia('${x.id}')">⚙️ Atur</button>${x.penilaian ? `<button class="btn-outline" style="padding:4px 10px;" onclick="window.mpiState.hasilMedia='${x.id}'; renderContent('mpi')">📊 Hasil (${siswaPer[x.id] ? siswaPer[x.id].size : 0} siswa)</button>` : ''}<button class="btn-outline" style="padding:4px 10px;" onclick="window.mpiState.mediaEdit='${x.id}'; renderContent('mpi')">✏️</button><button class="btn-outline" style="padding:4px 10px;" title="${x.aktif ? 'Sembunyikan dari siswa' : 'Tampilkan ke siswa'}" onclick="aktifkanMedia('${x.id}', ${!x.aktif})">${x.aktif ? '⏸' : '▶'}</button><button class="btn-outline" style="padding:4px 10px; color:#b91c1c; border-color:#b91c1c;" onclick="hapusMedia('${x.id}')">🗑️</button></div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:6px;">${x.aktif ? '' : '⏸ Disembunyikan dari siswa • '}${x.penilaian ? (kktpPengaturan(x.pengaturan) ? 'KKTP media ' + kktpPengaturan(x.pengaturan) : 'KKTP mengikuti media') + (x.kode_akses ? ' • kode ' + esc(x.kode_akses) : '') + ' • ' + (jml[x.id] || 0) + ' kiriman' : 'tanpa penilaian'}</div>`;
                 return `<div style="${x.aktif ? '' : 'opacity:0.6;'}">${kartuMedia(info, tombol)}</div>`;
             }).join('');
             return form + `<h3 style="color:var(--color-dark-blue); font-size:1rem; margin-bottom:10px;">Daftar Media (${md.data.length})</h3>` + (md.data.length ? `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:12px;">${daftar}</div>` : '<p style="color:var(--text-muted);">Belum ada media. Unggah file HTML di atas.</p>');
@@ -1854,7 +1897,7 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
                 window.mediaFile = { nama: f.name, teks, ukuran: f.size };
                 const jd = document.getElementById('md-judul'); if (jd && !jd.value.trim() && d.judul) jd.value = d.judul;
                 if (d.template || d.api) document.getElementById('md-nilai').checked = true;
-                info.innerHTML = `📄 ${esc(f.name)} • ${Math.round(f.size / 1024)} KB • ${d.template ? '<b style="color:#16a34a;">✔ Template MPI terdeteksi</b>: nilai Berlatih otomatis dikirim ke EDUVERSE; nama &amp; kelas diisi otomatis.' : d.api ? '<b style="color:#16a34a;">✔ Memakai EDUVERSE.kirimNilai</b>.' : '<span style="color:#b45309;">Tidak ditemukan pengiriman nilai</span> — cocok untuk media belajar tanpa penilaian.'}`;
+                info.innerHTML = `📄 ${esc(f.name)} • ${Math.round(f.size / 1024)} KB • ${d.template ? '<b style="color:#16a34a;">✔ Template MPI terdeteksi</b>: nilai Berlatih beserta predikatnya otomatis dikirim ke EDUVERSE; nama &amp; kelas diisi otomatis; menu Guru media dibuka lewat ⚙️ Atur.' : d.api ? '<b style="color:#16a34a;">✔ Memakai EDUVERSE.kirimNilai</b>.' : '<span style="color:#b45309;">Tidak ditemukan pengiriman nilai</span> — cocok untuk media belajar tanpa penilaian.'}`;
             };
             rd.readAsText(f, 'utf-8');
         }
@@ -1862,8 +1905,8 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             const st = window.mpiState, R = window.mediaRef, e = st.mediaEdit ? R.media.find(x => x.id === st.mediaEdit) : null, f = window.mediaFile;
             const v = (id) => document.getElementById(id).value.trim();
             if (!e && !f) { showToast('Pilih file .html terlebih dahulu.', true); return; }
-            const penilaian = document.getElementById('md-nilai').checked, kktp = Number(v('md-kktp'));
-            const isi = { judul: v('md-judul') || (f ? deteksiMedia(f.teks).judul || f.nama.replace(/\.html?$/i, '') : e.judul), deskripsi: v('md-desk') || null, materi_id: v('md-materi') || null, tp_id: v('md-tp') || null, penilaian, kktp: kktp >= 1 && kktp <= 100 ? kktp : 75, kode_akses: v('md-kode').toUpperCase() || null, aktif: document.getElementById('md-aktif').checked, diperbarui: new Date().toISOString() };
+            const penilaian = document.getElementById('md-nilai').checked;
+            const isi = { judul: v('md-judul') || (f ? deteksiMedia(f.teks).judul || f.nama.replace(/\.html?$/i, '') : e.judul), deskripsi: v('md-desk') || null, materi_id: v('md-materi') || null, tp_id: v('md-tp') || null, penilaian, formatif_otomatis: document.getElementById('md-otomatis').checked, kode_akses: v('md-kode').toUpperCase() || null, aktif: document.getElementById('md-aktif').checked, diperbarui: new Date().toISOString() };
             if (penilaian && !isi.tp_id) { showToast('Media berpenilaian harus diarahkan ke satu TP. Pilih materi dan TP tujuan.', true); return; }
             const tb = document.getElementById('md-simpan'); tb.disabled = true; tb.textContent = 'Menyimpan…';
             try {
@@ -1897,6 +1940,10 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             showToast('Media dihapus.');
             renderContent('mpi');
         }
+        function aturMedia(id) {
+            const x = window.mediaRef.media.find(z => z.id === id);
+            if (x) putarMedia(x, null, 'atur');
+        }
         function pratinjauMedia(id) {
             const x = window.mediaRef.media.find(z => z.id === id);
             if (x) putarMedia(x, null, true);
@@ -1909,7 +1956,7 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             const kembali = `<button class="btn-outline" style="margin-bottom:12px;" onclick="window.mpiState.hasilMedia=null; renderContent('mpi')">← Daftar media</button>`;
             if (!md) return kembali + '<p>Media tidak ditemukan.</p>';
             const [hs, tpq, mt] = await Promise.all([
-                ambilSemua(() => sb.from('media_hasil').select('id, siswa_id, bagian, skor, benar, salah, penilaian, rincian, dikirim_pada').eq('media_id', md.id).order('dikirim_pada')),
+                ambilSemua(() => sb.from('media_hasil').select('id, siswa_id, bagian, skor, benar, salah, penilaian, predikat, kktp, rincian, dikirim_pada').eq('media_id', md.id).order('dikirim_pada')),
                 md.materi_id ? sb.from('tp').select('id, materi_id, urutan, deskripsi').eq('materi_id', md.materi_id) : { data: [] },
                 md.materi_id ? sb.from('materi').select('nama, tingkat').eq('id', md.materi_id).maybeSingle() : { data: null }
             ]);
@@ -1920,25 +1967,30 @@ if(typeof kirimHasil==='function'&&typeof buildHasil==='function'){var asli=kiri
             const fq = md.tp_id && sw.data.length ? await sb.from('nilai_formatif').select('siswa_id, predikat').eq('tp_id', md.tp_id).in('siswa_id', sw.data.map(x => x.id)) : { data: [] };
             const formatif = {}; (fq.data || []).forEach(r => { formatif[r.siswa_id] = r.predikat; });
             const per = {}; hs.forEach(r => { (per[r.siswa_id] = per[r.siswa_id] || []).push(r); });
+            const kktpTerakhir = [...hs].reverse().find(r => r.penilaian && r.kktp != null);
+            const kktpMedia = kktpTerakhir ? Number(kktpTerakhir.kktp) : kktpPengaturan(md.pengaturan) || null;
             const baris = sw.data.map(x => {
                 const a = per[x.id] || [], nilai = a.filter(r => r.penilaian), lain = a.filter(r => !r.penilaian);
-                const best = nilai.length ? Math.max(...nilai.map(r => Number(r.skor))) : null, pred = best == null ? null : predikatKktp(best, md.kktp);
+                // Percobaan terbaik = skor tertinggi (terbaru bila sama). Predikatnya dari media; bila media tidak mengirim predikat, dihitung dengan KKTP media.
+                const top = nilai.reduce((t, r) => !t || Number(r.skor) >= Number(t.skor) ? r : t, null);
+                const best = top ? Number(top.skor) : null, predMedia = top ? normPredikat(top.predikat) : null;
+                const pred = top ? predMedia || predikatKktp(best, top.kktp || kktpMedia) : null, dihitung = !!top && !predMedia;
                 const lainBest = lain.length ? Math.max(...lain.map(r => Number(r.skor))) : null;
-                return { x, nilai, lain, best, pred, lainBest, terakhir: a.length ? a[a.length - 1].dikirim_pada : null, ada: formatif[x.id] || null };
+                return { x, nilai, lain, best, pred, dihitung, lainBest, terakhir: a.length ? a[a.length - 1].dikirim_pada : null, ada: formatif[x.id] || null };
             });
             window.hasilMediaData = { md, baris };
             const sudah = baris.filter(b => b.best != null), belum = baris.filter(b => b.best == null);
             const chip = (p) => p ? `<span class="pr-chip pr-${NAMA_PRED[p].split(' ')[0] === 'Perlu' ? 'Kurang' : NAMA_PRED[p]}">${NAMA_PRED[p]}</span>` : '-';
-            const tabel = sudah.map((b, i) => `<tr><td>${i + 1}</td><td style="text-align:left; white-space:nowrap;">${esc(b.x.nama)}</td><td><b>${fn1(b.best)}</b></td><td>${b.nilai.length}</td><td>${chip(b.pred)}</td><td>${b.ada ? chip(b.ada) + (b.ada !== b.pred ? ' <small style="color:#b45309;">berbeda</small>' : ' ✓') : '<small style="color:var(--text-muted);">belum</small>'}</td><td>${b.lainBest == null ? '-' : fn1(b.lainBest)}</td><td style="font-size:0.75rem;">${b.terakhir ? new Date(b.terakhir).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
-                <td><details><summary style="cursor:pointer; font-size:0.75rem;">${b.nilai.length + b.lain.length}×</summary><div style="text-align:left; font-size:0.72rem; min-width:200px;">${[...b.nilai, ...b.lain].sort((p, q) => p.dikirim_pada < q.dikirim_pada ? -1 : 1).map(r => `<div style="margin-top:4px;"><b>${esc(r.bagian || 'Nilai')}</b> ${fn1(Number(r.skor))}${r.benar != null ? ' (' + r.benar + ' benar)' : ''} • ${new Date(r.dikirim_pada).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${Array.isArray(r.rincian) ? '<br>' + r.rincian.map(z => esc(potong(String(z), 60))).join('<br>') : ''}</div>`).join('')}</div></details></td></tr>`).join('');
+            const tabel = sudah.map((b, i) => `<tr><td>${i + 1}</td><td style="text-align:left; white-space:nowrap;">${esc(b.x.nama)}</td><td><b>${fn1(b.best)}</b></td><td>${b.nilai.length}</td><td>${chip(b.pred)}${b.dihitung ? '<sup title="Media tidak mengirim predikat; dihitung EDUVERSE dengan KKTP ' + (kktpMedia || 75) + '">*</sup>' : ''}</td><td>${b.ada ? chip(b.ada) + (b.ada !== b.pred ? ' <small style="color:#b45309;">berbeda</small>' : ' ✓') : '<small style="color:var(--text-muted);">belum</small>'}</td><td>${b.lainBest == null ? '-' : fn1(b.lainBest)}</td><td style="font-size:0.75rem;">${b.terakhir ? new Date(b.terakhir).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-'}</td>
+                <td><details><summary style="cursor:pointer; font-size:0.75rem;">${b.nilai.length + b.lain.length}×</summary><div style="text-align:left; font-size:0.72rem; min-width:200px;">${[...b.nilai, ...b.lain].sort((p, q) => p.dikirim_pada < q.dikirim_pada ? -1 : 1).map(r => `<div style="margin-top:4px;"><b>${esc(r.bagian || 'Nilai')}</b> ${fn1(Number(r.skor))}${normPredikat(r.predikat) ? ' • ' + NAMA_PRED[normPredikat(r.predikat)] : ''}${r.benar != null ? ' (' + r.benar + ' benar)' : ''} • ${new Date(r.dikirim_pada).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${Array.isArray(r.rincian) ? '<br>' + r.rincian.map(z => esc(potong(String(z), 60))).join('<br>') : ''}</div>`).join('')}</div></details></td></tr>`).join('');
             const bagianLain = [...new Set(hs.filter(r => !r.penilaian).map(r => r.bagian || 'Lainnya'))].join('/') || 'Lainnya';
             return kembali + `<h3 style="color:var(--color-dark-blue);">📊 ${esc(md.judul)}</h3>
-                <p style="font-size:0.85rem; margin:4px 0 10px;">${mt.data ? esc(mt.data.nama) + ' • ' : ''}${tp ? '<b>' + P.label[tp.id] + '</b>: ' + esc(tp.deskripsi) : '<span style="color:#b91c1c;">TP tujuan belum dipilih — edit media dahulu.</span>'}<br><small style="color:var(--text-muted);">KKTP ${Number(md.kktp)} → ${teksBandKktp(md.kktp)}. Predikat memakai skor penilaian <b>tertinggi</b> tiap siswa.</small></p>
+                <p style="font-size:0.85rem; margin:4px 0 10px;">${mt.data ? esc(mt.data.nama) + ' • ' : ''}${tp ? '<b>' + P.label[tp.id] + '</b>: ' + esc(tp.deskripsi) : '<span style="color:#b91c1c;">TP tujuan belum dipilih — edit media dahulu.</span>'}<br><small style="color:var(--text-muted);">🎯 Predikat diambil dari <b>penilaian di dalam media</b>${kktpMedia ? ' (KKTP media ' + kktpMedia + ' → ' + teksBandKktp(kktpMedia) + ')' : ''}; KKTP diubah lewat ⚙️ Atur. Dipakai percobaan dengan skor <b>tertinggi</b> tiap siswa.</small></p>
                 <select onchange="window.mpiState.kelasHasilMedia=this.value; renderContent('mpi')" style="margin-bottom:10px;">${kelas.map(k => `<option value="${k.id}" ${k.id === st.kelasHasilMedia ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"><span class="abs-chip Hadir">Sudah mengerjakan: <b>${sudah.length}</b></span><span class="abs-chip ${belum.length ? 'Alpa' : ''}" title="${esc(belum.map(b => b.x.nama).join(', '))}">Belum: <b>${belum.length}</b></span>${['IST', 'BAIK', 'PB'].map(p => `<span class="abs-chip">${NAMA_PRED[p]}: <b>${sudah.filter(b => b.pred === p).length}</b></span>`).join('')}</div>
                 ${sudah.length ? `<div style="overflow-x:auto;"><table class="nl-tabel"><tr><th>No</th><th>Nama</th><th>Skor Terbaik</th><th>Percobaan</th><th>Predikat</th><th>Formatif Saat Ini</th><th>${esc(bagianLain)}</th><th>Terakhir</th><th>Riwayat</th></tr>${tabel}</table></div>
-                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:12px;"><label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400; font-size:0.85rem;"><input type="checkbox" id="hm-timpa" style="width:auto;"> Timpa predikat yang sudah terisi</label><button class="btn-submit" style="max-width:340px;" ${tp ? '' : 'disabled'} onclick="terapkanMediaFormatif()">✅ Terapkan ke Nilai Formatif ${tp ? P.label[tp.id] : ''}</button></div>
-                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">Nilai masuk ke Daftar Nilai → Formatif sebagai predikat. Tanpa centang "timpa", predikat yang sudah diisi (manual atau dari penerapan sebelumnya) tidak diubah.</p>` : '<p style="color:var(--text-muted);">Belum ada siswa kelas ini yang mengirim nilai.</p>'}
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:12px;"><label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400; font-size:0.85rem;"><input type="checkbox" id="hm-timpa" style="width:auto;"> Timpa predikat yang sudah terisi</label><button class="btn-submit" style="max-width:340px;" ${tp ? '' : 'disabled'} onclick="terapkanMediaFormatif()">${md.formatif_otomatis !== false ? '🔄 Sinkronkan ulang' : '✅ Terapkan'} ke Nilai Formatif ${tp ? P.label[tp.id] : ''}</button></div>
+                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:6px;">${md.formatif_otomatis !== false ? '🔗 <b>Terhubung otomatis:</b> setiap kali siswa mengirim penilaian, predikat percobaan terbaiknya langsung tercatat di Daftar Nilai → Formatif ' + (tp ? P.label[tp.id] : '') + '. Tombol ini hanya untuk menyinkronkan ulang nilai lama atau yang diubah manual (centang "timpa").' : 'Nilai masuk ke Daftar Nilai → Formatif sebagai predikat. Tanpa centang "timpa", predikat yang sudah diisi (manual atau dari penerapan sebelumnya) tidak diubah.'}</p>` : '<p style="color:var(--text-muted);">Belum ada siswa kelas ini yang mengirim nilai.</p>'}
                 ${belum.length ? `<details style="margin-top:10px; font-size:0.82rem;"><summary style="cursor:pointer;">Belum mengerjakan (${belum.length})</summary><p style="margin-top:6px;">${belum.map(b => esc(b.x.nama)).join(', ')}</p></details>` : ''}`;
         }
         async function terapkanMediaFormatif() {
