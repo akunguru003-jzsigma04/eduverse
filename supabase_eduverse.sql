@@ -1,6 +1,6 @@
 -- =====================================================================
 --  EDUVERSE — Skema Supabase lengkap (satu file)
---  Versi skema: 2026.11.19.2
+--  Versi skema: 2026.11.20.1
 --  Menggantikan supabase_schema.sql dan seluruh supabase_patch_1 s.d. 17.
 --
 --  Cara pakai:
@@ -299,6 +299,41 @@ create table if not exists public.nilai_sas (
 
 
 -- =====================================================================
+-- 3b. MEDIA INTERAKTIF (file HTML yang diunggah guru)
+-- =====================================================================
+create table if not exists public.media (
+  id uuid primary key default gen_random_uuid(),
+  judul text not null,
+  deskripsi text,
+  materi_id uuid references public.materi(id) on delete set null,
+  tp_id uuid references public.tp(id) on delete set null,      -- TP tujuan nilai formatif
+  file_path text not null,                                      -- lokasi di bucket "media"
+  ukuran integer,
+  penilaian boolean not null default false,                     -- media mengirim nilai ke EDUVERSE
+  kktp numeric(5,2) not null default 75 check (kktp between 1 and 100),
+  kode_akses text,                                              -- opsional; bila diisi, siswa wajib memasukkannya
+  aktif boolean not null default true,
+  urutan integer not null default 1,
+  dibuat_pada timestamptz not null default now(),
+  diperbarui timestamptz not null default now()
+);
+
+-- Setiap kiriman nilai dari media (satu baris per percobaan)
+create table if not exists public.media_hasil (
+  id uuid primary key default gen_random_uuid(),
+  media_id uuid not null references public.media(id) on delete cascade,
+  siswa_id uuid not null references public.siswa(id) on delete cascade,
+  bagian text,                                                  -- mis. Berlatih / Bermain
+  skor numeric(5,2) not null check (skor between 0 and 100),
+  benar integer,
+  salah integer,
+  penilaian boolean not null default true,                      -- dihitung untuk nilai formatif
+  rincian jsonb,
+  dikirim_pada timestamptz not null default now()
+);
+
+
+-- =====================================================================
 -- 4. PENYESUAIAN UNTUK PROYEK LAMA
 --    (pada proyek baru, bagian ini tidak mengubah apa pun)
 -- =====================================================================
@@ -441,6 +476,8 @@ create index if not exists idx_soal_materi        on public.soal_bank(materi_id)
 create index if not exists idx_soal_stimulus      on public.soal_bank(stimulus_id);
 create index if not exists idx_sesi_tes           on public.cbt_sesi(tes_id);
 create index if not exists idx_hasil_tp_tp        on public.cbt_hasil_tp(tp_id);
+create index if not exists idx_media_materi       on public.media(materi_id);
+create index if not exists idx_media_hasil_media  on public.media_hasil(media_id, siswa_id);
 
 
 -- =====================================================================
@@ -453,7 +490,7 @@ begin
   foreach t in array array['kelas','siswa','jam_pelajaran','jadwal','pengumuman','tugas','absensi','jurnal',
                            'materi','tp','nilai_formatif','nilai_sumatif','pp_sesi','stimulus','soal_bank',
                            'cbt_tes','cbt_tes_kelas','cbt_tes_soal','cbt_sesi','cbt_jawaban',
-                           'cbt_hasil_materi','cbt_hasil_tp','nilai_sas']
+                           'cbt_hasil_materi','cbt_hasil_tp','nilai_sas','media','media_hasil']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "guru_kelola" on public.%I', t);
@@ -1008,6 +1045,67 @@ begin
   return public.cbt_nilai_ulang(p_tes);
 end $$;
 
+-- ---------- Media interaktif: daftar untuk siswa (tanpa kode akses) ----------
+create or replace function public.media_daftar()
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', md.id, 'judul', md.judul, 'deskripsi', md.deskripsi, 'file_path', md.file_path,
+           'penilaian', md.penilaian, 'perlu_kode', md.kode_akses is not null,
+           'tingkat', m.tingkat, 'semester', m.semester, 'materi', m.nama, 'materi_urutan', m.urutan,
+           'tp_label', case when t.id is not null then 'TP' || t.no end, 'tp', t.deskripsi)
+         order by m.tingkat, m.semester, m.urutan, md.urutan, md.judul), '[]'::jsonb)
+  from public.media md
+  left join public.materi m on m.id = md.materi_id
+  left join (select tp.id, tp.deskripsi, row_number() over (partition by tp.materi_id order by tp.urutan, tp.id::text) as no from public.tp) t on t.id = md.tp_id
+  where md.aktif;
+$$;
+
+-- Memeriksa identitas siswa sebelum membuka media berpenilaian
+create or replace function public.media_masuk(p_media uuid, p_kelas uuid, p_nis text, p_kode text default null)
+returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare md public.media; s public.siswa; k public.kelas;
+begin
+  select * into md from public.media where id = p_media and aktif;
+  if not found then return jsonb_build_object('error', 'Media tidak ditemukan atau sedang dinonaktifkan.'); end if;
+  if md.kode_akses is not null and upper(trim(coalesce(p_kode, ''))) <> upper(trim(md.kode_akses)) then
+    return jsonb_build_object('error', 'Kode akses salah. Minta kode dari guru.');
+  end if;
+  select * into s from public.siswa where kelas_id = p_kelas and nis = trim(coalesce(p_nis, ''));
+  if not found then return jsonb_build_object('error', 'NIS tidak ditemukan di kelas yang dipilih.'); end if;
+  select * into k from public.kelas where id = s.kelas_id;
+  return jsonb_build_object('nama', s.nama, 'kelas', k.nama, 'nis', s.nis);
+end $$;
+
+-- Menerima nilai dari media. Nilai belum masuk rapor: guru meninjau lalu menerapkannya ke nilai formatif.
+create or replace function public.media_kirim(p_media uuid, p_kelas uuid, p_nis text, p_kode text, p_data jsonb)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare md public.media; s public.siswa; v_skor numeric; n integer; v_rinci jsonb;
+begin
+  select * into md from public.media where id = p_media and aktif;
+  if not found then return jsonb_build_object('error', 'Media tidak ditemukan atau sedang dinonaktifkan.'); end if;
+  if md.kode_akses is not null and upper(trim(coalesce(p_kode, ''))) <> upper(trim(md.kode_akses)) then
+    return jsonb_build_object('error', 'Kode akses salah.');
+  end if;
+  select * into s from public.siswa where kelas_id = p_kelas and nis = trim(coalesce(p_nis, ''));
+  if not found then return jsonb_build_object('error', 'NIS tidak ditemukan di kelas yang dipilih.'); end if;
+  if jsonb_typeof(p_data -> 'skor') <> 'number' then return jsonb_build_object('error', 'Skor tidak valid.'); end if;
+  v_skor := (p_data ->> 'skor')::numeric;
+  if v_skor < 0 or v_skor > 100 then return jsonb_build_object('error', 'Skor harus 0 sampai 100.'); end if;
+  select count(*) into n from public.media_hasil where media_id = md.id and siswa_id = s.id and dikirim_pada > now() - interval '1 day';
+  if n >= 60 then return jsonb_build_object('error', 'Batas kiriman hari ini tercapai.'); end if;
+  v_rinci := p_data -> 'rincian';
+  if v_rinci is not null and length(v_rinci::text) > 20000 then v_rinci := null; end if;
+  insert into public.media_hasil (media_id, siswa_id, bagian, skor, benar, salah, penilaian, rincian)
+  values (md.id, s.id, left(nullif(trim(coalesce(p_data ->> 'bagian', '')), ''), 40), round(v_skor, 2),
+          case when (p_data ->> 'benar') ~ '^[0-9]{1,4}$' then (p_data ->> 'benar')::integer end,
+          case when (p_data ->> 'salah') ~ '^[0-9]{1,4}$' then (p_data ->> 'salah')::integer end,
+          coalesce((p_data ->> 'penilaian')::boolean, true), v_rinci);
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- ---------- Hak akses fungsi ----------
 do $$
 declare f text;
@@ -1022,7 +1120,8 @@ begin
   -- fungsi siswa (tanpa login)
   foreach f in array array['cbt_intro(text, text, text)', 'cbt_mulai(text, text, text, text)', 'cbt_ikrar(uuid, text)',
                            'cbt_jawab(uuid, uuid, integer, text, jsonb)', 'cbt_ping(uuid, text)', 'cbt_lapor(uuid, text)',
-                           'cbt_selesai(uuid, text)', 'cbt_refleksi(uuid, text, jsonb)']
+                           'cbt_selesai(uuid, text)', 'cbt_refleksi(uuid, text, jsonb)',
+                           'media_daftar()', 'media_masuk(uuid, uuid, text, text)', 'media_kirim(uuid, uuid, text, text, jsonb)']
   loop
     execute 'revoke all on function public.' || f || ' from public';
     execute 'grant execute on function public.' || f || ' to anon, authenticated';
@@ -1049,6 +1148,11 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('soal', 'soal', true, 1048576, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = true, file_size_limit = 1048576, allowed_mime_types = array['image/jpeg','image/png','image/webp'];
 
+-- media: file HTML media interaktif (dibaca siswa; diunggah guru)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('media', 'media', true, 10485760, array['text/html'])
+on conflict (id) do update set public = true, file_size_limit = 10485760, allowed_mime_types = array['text/html'];
+
 drop policy if exists "foto_baca" on storage.objects;
 create policy "foto_baca" on storage.objects for select to anon, authenticated using (bucket_id = 'foto');
 drop policy if exists "foto_guru_tambah" on storage.objects;
@@ -1057,6 +1161,15 @@ drop policy if exists "foto_guru_ubah" on storage.objects;
 create policy "foto_guru_ubah" on storage.objects for update to authenticated using (bucket_id = 'foto' and public.is_guru()) with check (bucket_id = 'foto' and public.is_guru());
 drop policy if exists "foto_guru_hapus" on storage.objects;
 create policy "foto_guru_hapus" on storage.objects for delete to authenticated using (bucket_id = 'foto' and public.is_guru());
+
+drop policy if exists "media_guru_baca" on storage.objects;
+create policy "media_guru_baca" on storage.objects for select to authenticated using (bucket_id = 'media' and public.is_guru());
+drop policy if exists "media_guru_tambah" on storage.objects;
+create policy "media_guru_tambah" on storage.objects for insert to authenticated with check (bucket_id = 'media' and public.is_guru());
+drop policy if exists "media_guru_ubah" on storage.objects;
+create policy "media_guru_ubah" on storage.objects for update to authenticated using (bucket_id = 'media' and public.is_guru()) with check (bucket_id = 'media' and public.is_guru());
+drop policy if exists "media_guru_hapus" on storage.objects;
+create policy "media_guru_hapus" on storage.objects for delete to authenticated using (bucket_id = 'media' and public.is_guru());
 
 drop policy if exists "soal_guru_baca" on storage.objects;
 create policy "soal_guru_baca" on storage.objects for select to authenticated using (bucket_id = 'soal' and public.is_guru());
@@ -1092,12 +1205,13 @@ declare
   tabel text[] := array['guru','kelas','siswa','jam_pelajaran','jadwal','pengumuman','tugas','absensi','jurnal',
                         'materi','tp','nilai_formatif','nilai_sumatif','pp_sesi','stimulus','soal_bank',
                         'cbt_tes','cbt_tes_kelas','cbt_tes_soal','cbt_sesi','cbt_jawaban','cbt_hasil_materi',
-                        'cbt_hasil_tp','nilai_sas','sistem','sistem_riwayat'];
+                        'cbt_hasil_tp','nilai_sas','media','media_hasil','sistem','sistem_riwayat'];
   fungsi text[] := array['is_guru','cbt_token_hitung','cbt_token','cbt_opsi_asli','cbt_opsi_tampil','cbt_angka',
                          'cbt_skor_butir','cbt_butir','cbt_nilai','cbt_sisa','cbt_periksa','cbt_intro','cbt_mulai',
                          'cbt_ikrar','cbt_jawab','cbt_ping','cbt_lapor','cbt_umpan_tp','cbt_selesai','cbt_refleksi',
-                         'cbt_tutup_sesi','cbt_nilai_ulang','cbt_ubah_kunci','cbt_ubah_kunci_json','cbt_anulir','sistem_cek'];
-  bucket text[] := array['foto','soal'];
+                         'cbt_tutup_sesi','cbt_nilai_ulang','cbt_ubah_kunci','cbt_ubah_kunci_json','cbt_anulir',
+                         'media_daftar','media_masuk','media_kirim','sistem_cek'];
+  bucket text[] := array['foto','soal','media'];
   ns oid := 'public'::regnamespace;
 begin
   if not public.is_guru() then raise exception 'Hanya guru yang dapat melakukan ini'; end if;
@@ -1149,9 +1263,9 @@ begin
 end $$;
 
 -- Catat versi skema (dibaca menu Pembaruan Sistem)
-insert into public.sistem (kunci, nilai, diperbarui) values ('versi_skema', '2026.11.19.2', now())
+insert into public.sistem (kunci, nilai, diperbarui) values ('versi_skema', '2026.11.20.1', now())
 on conflict (kunci) do update set nilai = excluded.nilai, diperbarui = now();
-insert into public.sistem_riwayat (versi) values ('2026.11.19.2');
+insert into public.sistem_riwayat (versi) values ('2026.11.20.1');
 
 notify pgrst, 'reload schema';
 
