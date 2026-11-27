@@ -1000,9 +1000,10 @@
         // === PEMBARUAN SISTEM ===
         // Saat merilis versi baru: naikkan APP_VERSI (dan SKEMA_DIBUTUHKAN bila SQL berubah),
         // perbarui CATATAN_VERSI, lalu unggah index.html, supabase_eduverse.sql, dan versi.json ke GitHub.
-        const APP_VERSI = '2026.11.20.2';
+        const APP_VERSI = '2026.11.27.1';
         const SKEMA_DIBUTUHKAN = '2026.11.20.2';
         const CATATAN_VERSI = [
+            'Bank Soal: impor soal dari Word (.docx) dengan template — rumus Equation Word diubah otomatis ke LaTeX, gambar soal & stimulus ikut diunggah, ada ringkasan sebelum disimpan.',
             'Media Interaktif: menu Guru di dalam media dipadukan ke EDUVERSE (⚙️ Atur); predikat & KKTP mengikuti penilaian di dalam media dan langsung menjadi nilai formatif TP.',
             'MPI → Media Interaktif: guru mengunggah materi HTML interaktif; nilai penilaiannya dapat diterapkan menjadi nilai formatif per TP.',
             'Satu file database (supabase_eduverse.sql) menggantikan semua patch.',
@@ -3108,9 +3109,12 @@ E.kirimNilai({bagian:menu,skor:o.skor,benar:o.benar,salah:o.salah,rincian:o.jawa
                 <select onchange="ubahCbt('materiId', this.value)" style="margin-bottom:12px;">${materi.map(m => `<option value="${m.id}" ${m.id === g.materiId ? 'selected' : ''}>${esc(m.nama)} (Sem. ${m.semester}) — ${jml(m.id)} soal</option>`).join('')}</select>
                 ${stq.error ? '<div style="padding:8px 10px; border-radius:8px; background:#fef3c7; color:#92400e; font-size:0.8rem; margin-bottom:10px;">Jalankan supabase_eduverse.sql agar bentuk soal baru, stimulus, dan gambar dapat dipakai.</div>' : ''}
                 ${form}
-                <div style="${kotakCbt}"><strong style="font-size:0.9rem;">📗 Impor dari Excel</strong>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Kolom: Materi, TP, Tipe (PG/PGK/KATEGORI/ISIAN), Stimulus, Pertanyaan, A–E (opsi atau pernyataan), Kunci, Toleransi, Parsial, Label, Level, Indikator, Pembahasan, Bobot. Lihat contoh tiap tipe di Template. Jika kolom Materi kosong, soal masuk ke materi yang dipilih di atas.</p>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><input type="file" accept=".xlsx,.xls,.csv" onchange="imporSoalExcel(this)" style="flex:1; min-width:180px;"><button class="btn-outline" onclick="unduhTemplateSoal()">⬇️ Template</button></div></div>
+                <div style="${kotakCbt}"><strong style="font-size:0.9rem;">📥 Impor Soal dari File</strong>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin:4px 0 8px;">Tulis soal seperti biasa di <b>Word</b> (nomor soal, opsi A–E, baris KUNCI:, rumus Equation, gambar), atau pakai tabel <b>Excel</b>. Unduh template untuk contoh tiap bentuk soal. Soal tanpa MATERI masuk ke materi yang dipilih di atas.</p>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+                        <div style="padding:10px; border:1px solid var(--browser-border); border-radius:8px;"><b style="font-size:0.85rem;">📘 Word (.docx)</b><div style="font-size:0.75rem; color:var(--text-muted); margin:2px 0 6px;">Rumus Equation diubah otomatis ke LaTeX; gambar ikut diunggah. Ada ringkasan sebelum disimpan.</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="imporSoalWord(this)" style="flex:1; min-width:150px;"><button class="btn-outline" onclick="unduhTemplateSoalWord()">⬇️ Template Word</button></div></div>
+                        <div style="padding:10px; border:1px solid var(--browser-border); border-radius:8px;"><b style="font-size:0.85rem;">📗 Excel (.xlsx/.csv)</b><div style="font-size:0.75rem; color:var(--text-muted); margin:2px 0 6px;">Kolom: Materi, TP, Tipe, Stimulus, Pertanyaan, A–E, Kunci, Toleransi, Parsial, Label, Level, Indikator, Pembahasan, Bobot.</div><div style="display:flex; gap:6px; flex-wrap:wrap;"><input type="file" accept=".xlsx,.xls,.csv" onchange="imporSoalExcel(this)" style="flex:1; min-width:150px;"><button class="btn-outline" onclick="unduhTemplateSoal()">⬇️ Template Excel</button></div></div>
+                    </div></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;"><strong style="font-size:0.9rem;">${g.arsip ? '🗄️ Soal Diarsipkan' : 'Daftar Soal'}</strong><button class="btn-outline" onclick="ubahCbt('arsip', ${!g.arsip})">${g.arsip ? '← Soal aktif' : '🗄️ Arsip (' + nArsip + ')'}</button></div>
                 ${daftar.length ? daftar.map((s, i) => `<div style="padding:8px 0; border-bottom:1px solid var(--browser-border);${s.id === g.editId ? ' background:rgba(75,163,227,0.12);' : ''}"><div style="display:flex; justify-content:space-between; gap:8px;"><div style="font-size:0.85rem;"><b>${i + 1}.</b> <span class="pr-chip" style="padding:1px 6px;">${bentuk[s.tipe || 'PG']}</span> ${esc(potong(s.pertanyaan, 150))}${s.gambar_url ? ' 🖼️' : ''}${(s.panca_cinta || []).length ? ' <span title="' + s.panca_cinta.map(namaPanca).join(', ') + '">' + s.panca_cinta.map(k => (PANCA.find(p => p[0] === k) || [])[2]).join('') + '</span>' : ''}<br><small style="color:var(--text-muted);">${s.stimulus_id ? '📎 ' + esc(potong(stimJudul(s.stimulus_id), 40)) + ' • ' : ''}${s.tipe === 'ISIAN' ? '' : s.opsi.length + (s.tipe === 'KATEGORI' ? ' pernyataan' : ' opsi') + ' • '}Kunci ${esc(teksKunci(s))}${s.parsial ? ' • parsial' : ''}${s.indikator ? ' • ' + esc(potong(s.indikator, 60)) : ''}${s.stat_p != null ? ' • p ' + s.stat_p + ' • D ' + s.stat_d + ' (n=' + s.stat_n + ')' : ''}${s.level ? ' • ' + s.level : ''}${Number(s.bobot) !== 1 ? ' • bobot ' + s.bobot : ''}${s.diarsip_pada ? ' • diarsipkan ' + new Date(s.diarsip_pada).toLocaleDateString('id-ID') : ''}</small></div><span style="white-space:nowrap;">${s.diarsip_pada ? `<button class="btn-outline" style="padding:0 8px;" onclick="pulihkanSoal('${s.id}')">♻️ Pulihkan</button>` : `<button class="btn-outline" style="padding:0 8px;" title="Edit soal" onclick="editSoal('${s.id}')">✏️</button> <button class="btn-outline" style="padding:0 8px; color:#b91c1c; border-color:#b91c1c;" title="Hapus atau arsipkan" onclick="hapusSoal('${s.id}')">🗑️</button>`}</span></div>
                     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"><select style="flex:2; min-width:140px; font-size:0.8rem;" onchange="ubahMetaSoal('${s.id}','tp_id',this.value)">${tpOpsi(s.materi_id, s.tp_id)}</select><select style="flex:1; min-width:100px; font-size:0.8rem;" onchange="ubahMetaSoal('${s.id}','level',this.value)">${opsiLevel(s.level)}</select><button class="btn-outline" style="padding:0 8px;" data-t="${esc(s.indikator || '')}" onclick="ubahIndikator('${s.id}', this.dataset.t)">✏️ Indikator</button></div></div>`).join('') : `<p style="color:var(--text-muted);">${g.arsip ? 'Tidak ada soal yang diarsipkan untuk materi ini.' : 'Belum ada soal untuk materi ini.'}</p>`}`;
@@ -3368,8 +3372,8 @@ E.kirimNilai({bagian:menu,skor:o.skor,benar:o.benar,salah:o.salah,rincian:o.jawa
         function imporSoalExcel(input) {
             const f = input.files[0];
             if (!f) return;
+            input.value = '';
             if (typeof XLSX === 'undefined') { showToast('Pustaka Excel belum termuat. Periksa koneksi internet.', true); return; }
-            const g = window.cbtG, materi = window.cbtMateri || [], P = window.cbtTp || { per: {} };
             const rd = new FileReader();
             rd.onload = async (e) => {
                 try {
@@ -3378,39 +3382,322 @@ E.kirimNilai({bagian:menu,skor:o.skor,benar:o.benar,salah:o.salah,rincian:o.jawa
                     const h = baris.findIndex(r => r.some(c => /^pertanyaan$/i.test(String(c).trim())) && r.some(c => /^kunci$/i.test(String(c).trim())));
                     if (h < 0) { showToast('Baris judul tidak ditemukan (harus ada kolom Pertanyaan dan Kunci).', true); return; }
                     const kol = {}; baris[h].forEach((c, i) => { kol[String(c).trim().toLowerCase()] = i; });
-                    const peta = {}; materi.forEach(m => { peta[m.nama.trim().toLowerCase()] = m.id; });
-                    const rows = [], gagal = [], stimPerlu = new Map();
+                    const items = [];
                     baris.slice(h + 1).forEach((r, idx) => {
                         const sel = (k) => kol[k] === undefined ? '' : String(r[kol[k]] ?? '').trim();
-                        if (!sel('pertanyaan')) return;
-                        const nm = sel('materi').toLowerCase(), mid = nm ? peta[nm] : g.materiId;
-                        if (!mid) { gagal.push('baris ' + (h + idx + 2) + ': materi "' + sel('materi') + '" tidak ada'); return; }
-                        const out = barisKeSoal(sel, mid, P);
-                        if (out.error) { gagal.push('baris ' + (h + idx + 2) + ': ' + out.error); return; }
-                        const sj = sel('stimulus');
-                        if (sj) { const key = mid + '|' + sj.toLowerCase(); if (!stimPerlu.has(key)) stimPerlu.set(key, { materi_id: mid, judul: sj, teks: sel('teks stimulus') || null }); else if (!stimPerlu.get(key).teks && sel('teks stimulus')) stimPerlu.get(key).teks = sel('teks stimulus'); out.isi._stim = key; }
-                        rows.push(out.isi);
+                        if (sel('pertanyaan')) items.push({ sel, label: 'baris ' + (h + idx + 2) });
                     });
-                    if (!rows.length) { showToast('Tidak ada soal valid. ' + (gagal[0] || ''), true); return; }
-                    // stimulus: pakai yang sudah ada (judul sama pada materi sama), selebihnya dibuat
-                    const idStim = {};
-                    (window.cbtStimulus || []).forEach(s => { idStim[s.materi_id + '|' + s.judul.trim().toLowerCase()] = s.id; });
-                    const baru = [...stimPerlu.entries()].filter(([k]) => !idStim[k]).map(([, v]) => ({ ...v, teks: v.teks || v.judul }));
-                    if (baru.length) {
-                        const r = await sb.from('stimulus').insert(baru).select();
-                        if (r.error) { showToast('Gagal membuat stimulus: ' + r.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
-                        r.data.forEach(s => { idStim[s.materi_id + '|' + s.judul.trim().toLowerCase()] = s.id; });
-                    }
-                    rows.forEach(x => { if (x._stim) x.stimulus_id = idStim[x._stim] || null; delete x._stim; });
-                    for (let i = 0; i < rows.length; i += 100) {
-                        const { error } = await sb.from('soal_bank').insert(rows.slice(i, i + 100));
-                        if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
-                    }
-                    showToast(rows.length + ' soal diimpor' + (baru.length ? ', ' + baru.length + ' stimulus baru' : '') + (gagal.length ? '. ' + gagal.length + ' baris dilewati — ' + gagal.slice(0, 2).join('; ') : '.'), !!gagal.length);
-                    renderContent('nilai');
+                    await simpanImporSoal(items, [], false);
                 } catch (err) { showToast('File tidak dapat dibaca: ' + err.message, true); }
             };
             rd.readAsArrayBuffer(f);
+        }
+        // Jalur simpan bersama impor Excel & Word. items: [{ sel(kolom) → teks, label, gambar?: Blob, stimGambar?: Blob }]
+        async function simpanImporSoal(items, gagal, konfirmasi) {
+            const g = window.cbtG, materi = window.cbtMateri || [], P = window.cbtTp || { per: {} };
+            const peta = {}; materi.forEach(m => { peta[m.nama.trim().toLowerCase()] = m.id; });
+            const rows = [], stimPerlu = new Map();
+            items.forEach(it => {
+                const sel = it.sel, nm = sel('materi').toLowerCase(), mid = nm ? peta[nm] : g.materiId;
+                if (!mid) { gagal.push(it.label + ': materi "' + sel('materi') + '" tidak ada'); return; }
+                const out = barisKeSoal(sel, mid, P);
+                if (out.error) { gagal.push(it.label + ': ' + out.error); return; }
+                const sj = sel('stimulus');
+                if (sj) {
+                    const key = mid + '|' + sj.toLowerCase();
+                    if (!stimPerlu.has(key)) stimPerlu.set(key, { materi_id: mid, judul: sj, teks: sel('teks stimulus') || null, _gambar: it.stimGambar || null });
+                    else { const v = stimPerlu.get(key); if (!v.teks && sel('teks stimulus')) v.teks = sel('teks stimulus'); if (!v._gambar && it.stimGambar) v._gambar = it.stimGambar; }
+                    out.isi._stim = key;
+                }
+                if (it.gambar) out.isi._gambar = it.gambar;
+                rows.push(out.isi);
+            });
+            if (!rows.length) { showToast('Tidak ada soal valid. ' + (gagal[0] || ''), true); return; }
+            const idStim = {};
+            (window.cbtStimulus || []).forEach(s => { idStim[s.materi_id + '|' + s.judul.trim().toLowerCase()] = s.id; });
+            const baru = [...stimPerlu.entries()].filter(([k]) => !idStim[k]).map(([, v]) => v);
+            if (konfirmasi) {
+                const nmMateri = (id) => (materi.find(m => m.id === id) || {}).nama || '?';
+                const perMateri = {}; rows.forEach(r => { perMateri[nmMateri(r.materi_id)] = (perMateri[nmMateri(r.materi_id)] || 0) + 1; });
+                const perTipe = {}; rows.forEach(r => { perTipe[r.tipe] = (perTipe[r.tipe] || 0) + 1; });
+                const nGbr = rows.filter(r => r._gambar).length + baru.filter(v => v._gambar).length;
+                const pesan = 'Ditemukan ' + rows.length + ' soal siap diimpor:\n• ' + Object.entries(perMateri).map(([k, v]) => k + ': ' + v + ' soal').join('\n• ')
+                    + '\n• Bentuk: ' + Object.entries(perTipe).map(([k, v]) => (NAMA_TIPE[k] || k) + ' ' + v).join(', ')
+                    + '\n• Tanpa TP: ' + rows.filter(r => !r.tp_id).length + ' • Stimulus baru: ' + baru.length + ' • Gambar: ' + nGbr
+                    + (gagal.length ? '\n\n⚠ ' + gagal.length + ' catatan:\n- ' + gagal.slice(0, 8).join('\n- ') + (gagal.length > 8 ? '\n- …' : '') : '')
+                    + '\n\nLanjutkan impor?';
+                if (!confirm(pesan)) return;
+            }
+            // gambar soal & stimulus diunggah dahulu
+            const nUnggah = rows.filter(r => r._gambar).length + baru.filter(v => v._gambar).length;
+            if (nUnggah) showToast('Mengunggah ' + nUnggah + ' gambar…');
+            for (const v of baru) { if (v._gambar) { try { v.gambar_url = await unggahGambarBlob(v._gambar); } catch (e) { gagal.push('gambar stimulus "' + v.judul + '" gagal diunggah: ' + e.message); } } delete v._gambar; if (!v.teks && !v.gambar_url) v.teks = v.judul; }
+            for (const r of rows) { if (r._gambar) { try { r.gambar_url = await unggahGambarBlob(r._gambar); } catch (e) { gagal.push('gambar soal "' + potong(r.pertanyaan, 30) + '" gagal diunggah: ' + e.message); } } delete r._gambar; }
+            if (baru.length) {
+                const r = await sb.from('stimulus').insert(baru).select();
+                if (r.error) { showToast('Gagal membuat stimulus: ' + r.error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
+                r.data.forEach(s => { idStim[s.materi_id + '|' + s.judul.trim().toLowerCase()] = s.id; });
+            }
+            rows.forEach(x => { if (x._stim) x.stimulus_id = idStim[x._stim] || null; delete x._stim; });
+            for (let i = 0; i < rows.length; i += 100) {
+                const { error } = await sb.from('soal_bank').insert(rows.slice(i, i + 100));
+                if (error) { showToast('Gagal: ' + error.message + ' (jalankan supabase_eduverse.sql)', true); return; }
+            }
+            showToast(rows.length + ' soal diimpor' + (baru.length ? ', ' + baru.length + ' stimulus baru' : '') + (gagal.length ? '. ' + gagal.length + ' catatan — ' + gagal.slice(0, 2).join('; ') : '.'), !!gagal.length);
+            renderContent('nilai');
+        }
+
+        // ===== IMPOR SOAL DARI WORD (.docx) =====
+        // Dibaca langsung di browser: file .docx adalah ZIP; isinya dibuka dengan DecompressionStream bawaan browser.
+        // Format: nomor soal, opsi A–E (boleh penomoran otomatis Word), baris KUNCI:/TP:/LEVEL:/…; rumus Equation Word
+        // diubah menjadi LaTeX; gambar di bawah soal/stimulus ikut diunggah.
+        async function bukaZip(buf) {
+            const u8 = new Uint8Array(buf), dv = new DataView(buf);
+            let e = u8.length - 22;
+            while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+            if (e < 0) throw new Error('bukan file .docx (simpan ulang dari Word sebagai .docx)');
+            const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+            const isi = {}, dec = new TextDecoder();
+            for (let i = 0; i < n; i++) {
+                const metode = dv.getUint16(p + 10, true), uk = dv.getUint32(p + 20, true), ln = dv.getUint16(p + 28, true), lx = dv.getUint16(p + 30, true), lk = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+                const nama = dec.decode(u8.subarray(p + 46, p + 46 + ln));
+                isi[nama] = { metode, uk, off };
+                p += 46 + ln + lx + lk;
+            }
+            const ambil = async (nama) => {
+                const f = isi[nama]; if (!f) return null;
+                const mulai = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(mulai, mulai + f.uk);
+                if (f.metode === 0) return data.slice();
+                if (f.metode !== 8) throw new Error('kompresi ZIP tidak didukung');
+                if (typeof DecompressionStream === 'undefined') throw new Error('browser terlalu lama; perbarui Chrome/Edge/Firefox');
+                return new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+            };
+            return { nama: Object.keys(isi), ambil, teks: async (nm) => { const b = await ambil(nm); return b ? dec.decode(b) : null; } };
+        }
+        // ZIP tanpa kompresi untuk membuat template .docx
+        function buatZip(files) {
+            const crcT = window.crcTabel || (window.crcTabel = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
+            const crc = (b) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+            const enc = new TextEncoder(), bag = [], pusat = []; let off = 0;
+            const h = (len) => { const b = new Uint8Array(len); return [b, new DataView(b.buffer)]; };
+            files.forEach(([nama, teks]) => {
+                const nm = enc.encode(nama), d = enc.encode(teks), c = crc(d);
+                const [l, lv] = h(30); lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true); lv.setUint32(14, c, true); lv.setUint32(18, d.length, true); lv.setUint32(22, d.length, true); lv.setUint16(26, nm.length, true);
+                const [g, gv] = h(46); gv.setUint32(0, 0x02014b50, true); gv.setUint16(4, 20, true); gv.setUint16(6, 20, true); gv.setUint16(8, 0x0800, true); gv.setUint32(16, c, true); gv.setUint32(20, d.length, true); gv.setUint32(24, d.length, true); gv.setUint16(28, nm.length, true); gv.setUint32(42, off, true);
+                bag.push(l, nm, d); pusat.push(g, nm); off += 30 + nm.length + d.length;
+            });
+            const ukP = pusat.reduce((s, b) => s + b.length, 0), [z, zv] = h(22);
+            zv.setUint32(0, 0x06054b50, true); zv.setUint16(8, files.length, true); zv.setUint16(10, files.length, true); zv.setUint32(12, ukP, true); zv.setUint32(16, off, true);
+            return new Blob([...bag, ...pusat, z], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        }
+        // Equation Word (OMML) → LaTeX
+        function ommlKeLatex(el) {
+            const SIM = { '×': '\\times ', '÷': '\\div ', '≤': '\\le ', '≥': '\\ge ', '≠': '\\ne ', '−': '-', '·': '\\cdot ', '⋅': '\\cdot ', 'π': '\\pi ', '∞': '\\infty ', '±': '\\pm ', 'α': '\\alpha ', 'β': '\\beta ', 'θ': '\\theta ', '∆': '\\Delta ', 'Δ': '\\Delta ', '°': '^\\circ ', '∈': '\\in ', '→': '\\to ', '≈': '\\approx ', '∠': '\\angle ', '√': '\\sqrt{}', '{': '\\{', '}': '\\}' };
+            const anak = (n, nm) => [...n.children].find(c => c.localName === nm);
+            const atr = (n, pr, nm) => { const p = n && anak(n, pr), c = p && anak(p, nm); return c ? c.getAttributeNS(c.namespaceURI, 'val') || c.getAttribute('m:val') : null; };
+            const L = (n) => n ? [...n.children].map(x => k(x)).join('') : '';
+            const k = (n) => {
+                switch (n.localName) {
+                    case 'r': return [...n.getElementsByTagName('*')].filter(t => t.localName === 't').map(t => [...t.textContent].map(ch => SIM[ch] || ch).join('')).join('');
+                    case 'f': return '\\frac{' + L(anak(n, 'num')) + '}{' + L(anak(n, 'den')) + '}';
+                    case 'sSup': return '{' + L(anak(n, 'e')) + '}^{' + L(anak(n, 'sup')) + '}';
+                    case 'sSub': return '{' + L(anak(n, 'e')) + '}_{' + L(anak(n, 'sub')) + '}';
+                    case 'sSubSup': return '{' + L(anak(n, 'e')) + '}_{' + L(anak(n, 'sub')) + '}^{' + L(anak(n, 'sup')) + '}';
+                    case 'rad': { const d = L(anak(n, 'deg')); return '\\sqrt' + (d ? '[' + d + ']' : '') + '{' + L(anak(n, 'e')) + '}'; }
+                    case 'd': { const b = atr(n, 'dPr', 'begChr'), t = atr(n, 'dPr', 'endChr'), s = atr(n, 'dPr', 'sepChr') || ',', kur = (c) => ({ '{': '\\{', '}': '\\}', '': '.' })[c] ?? c;
+                        return '\\left' + kur(b == null ? '(' : b) + [...n.children].filter(c => c.localName === 'e').map(L).join(s) + '\\right' + kur(t == null ? ')' : t); }
+                    case 'nary': { const c = atr(n, 'naryPr', 'chr') || '∫', op = ({ '∑': '\\sum', '∫': '\\int', '∏': '\\prod', '∬': '\\iint' })[c] || c, sb = L(anak(n, 'sub')), sp = L(anak(n, 'sup'));
+                        return op + (sb ? '_{' + sb + '}' : '') + (sp ? '^{' + sp + '}' : '') + ' ' + L(anak(n, 'e')); }
+                    case 'func': return L(anak(n, 'fName')).replace(/^(sin|cos|tan|log|ln|lim|cot|sec|csc)$/, '\\$1') + ' ' + L(anak(n, 'e'));
+                    case 'limLow': return L(anak(n, 'e')).replace(/^lim$/, '\\lim') + '_{' + L(anak(n, 'lim')) + '}';
+                    case 'limUpp': return L(anak(n, 'e')) + '^{' + L(anak(n, 'lim')) + '}';
+                    case 'bar': return '\\overline{' + L(anak(n, 'e')) + '}';
+                    case 'acc': return (atr(n, 'accPr', 'chr') === '⃗' ? '\\vec{' : '\\hat{') + L(anak(n, 'e')) + '}';
+                    case 'eqArr': return '\\begin{aligned}' + [...n.children].filter(c => c.localName === 'e').map(L).join('\\\\') + '\\end{aligned}';
+                    case 'm': return '\\begin{pmatrix}' + [...n.children].filter(c => c.localName === 'mr').map(r => [...r.children].filter(c => c.localName === 'e').map(L).join('&')).join('\\\\') + '\\end{pmatrix}';
+                    default: return /Pr$/.test(n.localName) ? '' : L(n);
+                }
+            };
+            return k(el).replace(/\{([A-Za-z0-9.,]|\\[a-z]+ ?)\}(?=[\^_])/g, '$1').replace(/\s+/g, ' ').trim();
+        }
+        // Isi .docx → baris-baris teks {t, jenis: 'angka'|'huruf'|null, gambar: [rId]}
+        async function bacaDocx(buf) {
+            const z = await bukaZip(buf), xml = await z.teks('word/document.xml');
+            if (!xml) throw new Error('isi dokumen tidak ditemukan; pastikan file .docx (bukan .doc)');
+            const dp = new DOMParser(), doc = dp.parseFromString(xml, 'application/xml');
+            // format penomoran otomatis: angka → nomor soal, huruf → opsi
+            const fmt = {};
+            const nx = await z.teks('word/numbering.xml');
+            if (nx) {
+                const nd = dp.parseFromString(nx, 'application/xml'), abs = {}, el = (n, nm) => [...n.getElementsByTagName('*')].filter(x => x.localName === nm), val = (n) => n.getAttribute('w:val');
+                el(nd, 'abstractNum').forEach(a => { abs[a.getAttribute('w:abstractNumId')] = {}; el(a, 'lvl').forEach(l => { const f = el(l, 'numFmt')[0]; abs[a.getAttribute('w:abstractNumId')][l.getAttribute('w:ilvl')] = f ? val(f) : ''; }); });
+                el(nd, 'num').forEach(n => { const a = el(n, 'abstractNumId')[0]; if (a) fmt[n.getAttribute('w:numId')] = abs[val(a)] || {}; });
+            }
+            const rels = {}, rx = await z.teks('word/_rels/document.xml.rels');
+            if (rx) [...dp.parseFromString(rx, 'application/xml').getElementsByTagName('Relationship')].forEach(r => { rels[r.getAttribute('Id')] = 'word/' + r.getAttribute('Target').replace(/^\/?word\//, '').replace(/^\//, ''); });
+            const baris = [];
+            const par = (p) => {
+                let t = '', gbr = [], jenis = null;
+                const np = [...p.getElementsByTagName('*')].find(x => x.localName === 'numPr');
+                if (np) {
+                    const g = (nm) => { const x = [...np.children].find(c => c.localName === nm); return x ? x.getAttribute('w:val') : null; };
+                    const f = (fmt[g('numId')] || {})[g('ilvl') || '0'] || '';
+                    jenis = /decimal/i.test(f) ? 'angka' : /letter/i.test(f) ? 'huruf' : null;
+                }
+                const jalan = (n) => {
+                    for (const c of n.children) {
+                        const ln = c.localName;
+                        if (ln === 'oMath' || ln === 'oMathPara') { const ms = ln === 'oMath' ? [c] : [...c.children].filter(x => x.localName === 'oMath'); ms.forEach(m => { t += '$' + ommlKeLatex(m) + '$'; }); }
+                        else if (ln === 't' && c.namespaceURI && /wordprocessingml/.test(c.namespaceURI)) t += c.textContent;
+                        else if (ln === 'tab') t += ' ';
+                        else if (ln === 'br' || ln === 'cr') { baris.push({ t, jenis, gambar: gbr }); t = ''; gbr = []; jenis = null; }
+                        else if (ln === 'blip') { const id = c.getAttribute('r:embed'); if (id) gbr.push(id); }
+                        else if (ln === 'imagedata') { const id = c.getAttribute('r:id'); if (id) gbr.push(id); }
+                        else if (ln === 'pPr' || ln === 'rPr' || ln === 'instrText' || ln === 'delText') continue;
+                        else jalan(c);
+                    }
+                };
+                jalan(p);
+                baris.push({ t, jenis, gambar: gbr });
+            };
+            const telusur = (n) => { for (const c of n.children) { if (c.localName === 'p') par(c); else if (c.localName !== 'sectPr') telusur(c); } };
+            const body = [...doc.getElementsByTagName('*')].find(x => x.localName === 'body');
+            if (body) telusur(body);
+            baris.forEach(b => { b.t = b.t.replace(/ /g, ' ').replace(/[ \t]+/g, ' ').trim(); });
+            return { baris, gambar: async (rId) => { const p = rels[rId]; if (!p) return null; const b = await z.ambil(p); return b ? { data: b, ext: p.split('.').pop().toLowerCase() } : null; } };
+        }
+        const KUNCI_WORD = ['MATERI', 'STIMULUS', 'TEKS STIMULUS', 'TIPE', 'BENTUK', 'KUNCI', 'JAWABAN', 'TP', 'LEVEL', 'BOBOT', 'SKOR', 'INDIKATOR', 'PEMBAHASAN', 'PARSIAL', 'LABEL', 'TOLERANSI', 'PANCA CINTA'];
+        // Baris dokumen → daftar soal (bentuk sama dengan baris Excel)
+        function wordKeSoal(baris) {
+            const reKunci = new RegExp('^(' + KUNCI_WORD.join('|') + ')\\s*:\\s*(.*)$', 'i'), rePisah = new RegExp('\\s+\\|\\s+(?=(?:' + KUNCI_WORD.join('|') + ')\\s*:)', 'i');
+            const mulai = baris.findIndex(b => /^=+\s*MULAI SOAL\s*=+$/i.test(b.t));
+            const soal = [], catatan = [];
+            let materi = '', stim = null, q = null, akhir = null;
+            const tutup = () => { if (q) soal.push(q); q = null; };
+            const tag = (s) => { const m = s.match(/^[\[(]\s*(PGK|PG|KATEGORI|ISIAN|MCMA|B\/S|BS)\s*[\])]\s*/i); return m ? [m[1].toUpperCase(), s.slice(m[0].length)] : ['', s]; };
+            baris.slice(mulai + 1).forEach(b => {
+                let t = b.t;
+                const m = t.match(reKunci);
+                if (m) {
+                    t.split(rePisah).forEach(bag => {
+                        const x = bag.match(reKunci); if (!x) return;
+                        const kk = x[1].toUpperCase(), v = x[2].trim();
+                        if (kk === 'MATERI') { tutup(); materi = v; stim = null; akhir = null; }
+                        else if (kk === 'STIMULUS') { tutup(); stim = !v || /^(-|selesai|tidak ada)$/i.test(v) ? null : { judul: v, teks: [], gambar: [] }; akhir = stim ? 'stim' : null; }
+                        else if (kk === 'TEKS STIMULUS' && stim) { stim.teks.push(v); akhir = 'stim'; }
+                        else if (!q) catatan.push('"' + potong(bag, 40) + '" diabaikan (belum ada soal di atasnya)');
+                        else { const nm = ({ BENTUK: 'tipe', JAWABAN: 'kunci', SKOR: 'bobot' })[kk] || kk.toLowerCase(); q.f[nm] = v; akhir = nm === 'pembahasan' || nm === 'indikator' ? nm : 'kunci'; }
+                    });
+                    if (b.gambar.length && q) q.gambar.push(...b.gambar);
+                    return;
+                }
+                const no = t.match(/^(\d{1,3})\s*[.)]\s*(.*)$/);
+                if (b.jenis === 'angka' || no) {
+                    tutup();
+                    const [tp, sisa] = tag(no && b.jenis !== 'angka' ? no[2] : t);
+                    q = { no: no && b.jenis !== 'angka' ? no[1] : String(soal.length + 1), tipe: tp, teks: sisa ? [sisa] : [], opsi: [], f: {}, gambar: [...b.gambar], materi, stim };
+                    akhir = 'tanya'; return;
+                }
+                const op = t.match(/^([A-Ea-e])\s*[.)]\s+(.*)$/);
+                if (q && (akhir === 'tanya' || akhir === 'opsi') && (b.jenis === 'huruf' || op)) { q.opsi.push(b.jenis === 'huruf' ? t : op[2]); if (b.gambar.length) q.gambar.push(...b.gambar); akhir = 'opsi'; return; }
+                if (b.gambar.length) { if (akhir === 'stim' && stim) stim.gambar.push(...b.gambar); else if (q) q.gambar.push(...b.gambar); }
+                if (!t) return;
+                if (akhir === 'stim' && stim) stim.teks.push(t);
+                else if (q && akhir === 'tanya') { const [tp, sisa] = q.teks.length ? ['', t] : tag(t); if (tp) q.tipe = tp; q.teks.push(sisa); }
+                else if (q && akhir === 'opsi') q.opsi[q.opsi.length - 1] += ' ' + t;
+                else if (q && (akhir === 'pembahasan' || akhir === 'indikator')) q.f[akhir] = (q.f[akhir] ? q.f[akhir] + '\n' : '') + t;
+            });
+            tutup();
+            return { soal: soal.map(q => {
+                let tipe = (q.f.tipe || q.tipe || '').toUpperCase();
+                const kc = (q.f.kunci || '').trim(), tok = kc.split(/[,;\s]+/).filter(Boolean);
+                if (!tipe) tipe = !q.opsi.length ? 'ISIAN' : tok.length > 1 && tok.every(x => /^(B|S|BENAR|SALAH)$/i.test(x)) && tok.some(x => /^(S|SALAH|BENAR)$/i.test(x)) ? 'KATEGORI' : tok.length > 1 ? 'PGK' : 'PG';
+                const nilai = Object.assign({}, q.f, { pertanyaan: q.teks.join('\n').trim(), tipe, materi: q.materi, stimulus: q.stim ? q.stim.judul : '', 'teks stimulus': q.stim ? q.stim.teks.join('\n') : '' });
+                ['a', 'b', 'c', 'd', 'e'].forEach((h, i) => { nilai[h] = q.opsi[i] || ''; });
+                return { no: q.no, sel: (k) => String(nilai[k] ?? '').trim(), lebih: q.opsi.length > 5, gambar: q.gambar[0] || null, stim: q.stim };
+            }), catatan };
+        }
+        // Gambar → JPEG ≤1200 px → bucket soal. Mengembalikan URL publik.
+        async function unggahGambarBlob(blob) {
+            const url0 = URL.createObjectURL(blob);
+            try {
+                const img = await new Promise((ok, gagal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => gagal(new Error('format gambar tidak didukung')); i.src = url0; });
+                const sk = Math.min(1, 1200 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+                c.width = Math.max(1, Math.round(img.width * sk)); c.height = Math.max(1, Math.round(img.height * sk));
+                const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+                const jpg = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.85));
+                const nama = ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)) + '.jpg';
+                const { error } = await sb.storage.from('soal').upload(nama, jpg, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+                if (error) throw new Error(error.message);
+                return sb.storage.from('soal').getPublicUrl(nama).data.publicUrl;
+            } finally { URL.revokeObjectURL(url0); }
+        }
+        function imporSoalWord(input) {
+            const f = input.files[0];
+            if (!f) return;
+            input.value = '';
+            if (!/\.docx$/i.test(f.name)) { showToast('Pilih file .docx. File .doc lama: buka di Word lalu Simpan Sebagai .docx.', true); return; }
+            const rd = new FileReader();
+            rd.onload = async (e) => {
+                try {
+                    const d = await bacaDocx(e.target.result), { soal, catatan } = wordKeSoal(d.baris);
+                    if (!soal.length) { showToast('Tidak ditemukan soal. Setiap soal harus diawali nomor, mis. "1. [PG] …". Lihat ⬇️ Template Word.', true); return; }
+                    const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+                    const blobGbr = async (rId, label, gagal) => { const g = await d.gambar(rId); if (!g) return null; if (!MIME[g.ext]) { gagal.push(label + ': gambar format ' + g.ext.toUpperCase() + ' tidak didukung, tambahkan manual'); return null; } return new Blob([g.data], { type: MIME[g.ext] }); };
+                    const gagal = [...catatan], items = [], stimBlob = new Map();
+                    for (const s of soal) {
+                        const lb = 'soal no. ' + s.no;
+                        if (s.lebih) gagal.push(lb + ': opsi lebih dari 5, hanya A–E yang dipakai');
+                        const it = { sel: s.sel, label: lb };
+                        if (s.gambar) it.gambar = await blobGbr(s.gambar, lb, gagal);
+                        if (s.stim && s.stim.gambar.length && !stimBlob.has(s.stim)) stimBlob.set(s.stim, await blobGbr(s.stim.gambar[0], 'stimulus "' + s.stim.judul + '"', gagal));
+                        if (s.stim) it.stimGambar = stimBlob.get(s.stim) || null;
+                        items.push(it);
+                    }
+                    await simpanImporSoal(items, gagal, true);
+                } catch (err) { showToast('File Word tidak dapat dibaca: ' + err.message, true); }
+            };
+            rd.readAsArrayBuffer(f);
+        }
+        function unduhTemplateSoalWord() {
+            const m = (window.cbtMateri && window.cbtMateri[0] && window.cbtMateri[0].nama) || 'Eksponen';
+            const x = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const p = (t, o = {}) => `<w:p>${o.h ? '<w:pPr><w:spacing w:after="120"/></w:pPr>' : o.sp ? '<w:pPr><w:spacing w:before="200"/></w:pPr>' : ''}<w:r><w:rPr>${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.c ? '<w:color w:val="' + o.c + '"/>' : ''}${o.sz ? '<w:sz w:val="' + o.sz + '"/>' : ''}</w:rPr><w:t xml:space="preserve">${x(t)}</w:t></w:r></w:p>`;
+            const kunci = (t) => p(t, { c: '1D4ED8' }), panduan = (t) => p(t, { c: '475569', sz: 20 });
+            const isi = [
+                p('TEMPLATE BANK SOAL EDUVERSE', { b: true, sz: 32, c: '1E3A8A', h: true }),
+                p('Petunjuk (bagian di atas garis MULAI SOAL tidak dibaca aplikasi)', { b: true, sp: true }),
+                panduan('1. Setiap soal diawali nomor, misalnya "1." (boleh penomoran otomatis Word), lalu bentuk soal: [PG], [PGK], [KATEGORI], atau [ISIAN]. Tanpa tanda, bentuk soal ditebak dari kunci.'),
+                panduan('2. Opsi jawaban (PG/PGK) atau pernyataan (KATEGORI) ditulis A. sampai E., satu per baris. Boleh memakai penomoran huruf otomatis Word.'),
+                panduan('3. KUNCI: PG satu huruf (B) • PGK beberapa huruf (A,C,D) • KATEGORI B/S untuk tiap pernyataan sesuai urutan (B,S,B) • ISIAN jawaban yang diterima dipisah | (0,5|1/2).'),
+                panduan('4. Baris tambahan (opsional): TP (nomor TP), LEVEL (L1 Pemahaman, L2 Aplikasi, L3 Penalaran), BOBOT, INDIKATOR, PEMBAHASAN, PARSIAL (Y = skor parsial PGK/KATEGORI), LABEL (Benar/Salah, Sesuai/Tidak sesuai, Ya/Tidak, Fakta/Opini), TOLERANSI (ISIAN angka), PANCA CINTA (Allah, Ilmu, Lingkungan, Diri, Tanah Air). Beberapa boleh dalam satu baris dipisah " | ".'),
+                panduan('5. MATERI: nama materi persis seperti di MPI → Materi & TP; berlaku untuk soal di bawahnya. Tanpa MATERI, soal masuk ke materi yang sedang dipilih di Bank Soal.'),
+                panduan('6. STIMULUS: judul, lalu teks stimulus di baris-baris berikutnya. Dipakai oleh soal di bawahnya sampai baris STIMULUS: - (selesai). Stimulus dengan judul yang sudah ada dipakai ulang.'),
+                panduan('7. Rumus: pakai Equation Word (Insert → Equation) atau tulis LaTeX di antara tanda $, misalnya $2^3 \\times 2^2$.'),
+                panduan('8. Gambar: sisipkan gambar di bawah pertanyaan (atau di bawah teks stimulus); otomatis diunggah. Format PNG/JPG.'),
+                p('=== MULAI SOAL ===', { b: true, c: 'B91C1C', sp: true }),
+                kunci('MATERI: ' + m),
+                p('1. [PG] Hasil dari $2^3 \\times 2^2$ adalah ...', { sp: true }), p('A. 16'), p('B. 32'), p('C. 64'), p('D. 128'),
+                kunci('KUNCI: B'), kunci('TP: 1 | LEVEL: L1 | BOBOT: 1 | PANCA CINTA: Ilmu'), kunci('INDIKATOR: Menentukan hasil perkalian bilangan berpangkat'), kunci('PEMBAHASAN: Dikalikan: $2^{3+2} = 2^5 = 32$.'),
+                kunci('STIMULUS: Pertumbuhan Bakteri'), p('Sebuah koloni bakteri berlipat dua setiap jam. Mula-mula ada 50 bakteri.', { i: true }),
+                p('2. [PGK] Pernyataan yang benar tentang banyak bakteri adalah ... (pilih semua yang benar)', { sp: true }), p('A. Setelah 1 jam ada 100'), p('B. Setelah 3 jam ada 300'), p('C. Setelah 3 jam ada 400'), p('D. Rumusnya $50 \\cdot 2^t$'),
+                kunci('KUNCI: A,C,D | PARSIAL: Y'), kunci('TP: 2 | LEVEL: L2 | BOBOT: 2 | PANCA CINTA: Ilmu, Lingkungan'), kunci('INDIKATOR: Memodelkan pertumbuhan eksponensial'),
+                p('3. [KATEGORI] Tentukan Benar atau Salah untuk setiap pernyataan berikut.', { sp: true }), p('A. Banyak bakteri setelah 2 jam adalah 200'), p('B. Banyak bakteri bertambah 50 setiap jam'), p('C. Setelah 5 jam bakteri lebih dari 1.500'),
+                kunci('KUNCI: B,S,B | LABEL: Benar/Salah | PARSIAL: Y'), kunci('TP: 2 | LEVEL: L3 | BOBOT: 2'), kunci('INDIKATOR: Menalar sifat fungsi eksponensial'),
+                kunci('STIMULUS: -'),
+                p('4. [ISIAN] Nilai dari $4^{-1/2}$ adalah ...', { sp: true }),
+                kunci('KUNCI: 0,5|1/2 | TOLERANSI: 0'), kunci('TP: 1 | LEVEL: L1'), kunci('PEMBAHASAN: $4^{-1/2} = 1/\\sqrt{4} = 1/2$')
+            ].join('');
+            const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+            const blob = buatZip([
+                ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'],
+                ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
+                ['word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+                ['word/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="40" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults></w:styles>`],
+                ['word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${isi}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="709" w:footer="709" w:gutter="0"/></w:sectPr></w:body></w:document>`]
+            ]);
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'template_bank_soal.docx';
+            document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         }
 
         // --- Tes ---
